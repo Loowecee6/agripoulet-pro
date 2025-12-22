@@ -1,0 +1,5 @@
+{
+  "name": "AgriPoulet Pro Cloud",
+  "description": "Application mobile partagée pour la gestion d'élevage avicole avec synchronisation en temps réel et gestion des rôles Admin/Employé.",
+  "requestFramePermissions": []
+}
