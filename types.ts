@@ -59,6 +59,7 @@ export interface Chicken {
 export interface StockBatch {
   id: string;
   productionBatchId?: string;
+  typeOrigine: 'PR' | 'IM';
   lettre: string;
   nom: string;
   prixKg: number;

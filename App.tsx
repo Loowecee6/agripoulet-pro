@@ -360,6 +360,7 @@ const ProductionView = ({ data, setData, user }: { data: AppData; setData: (d: A
                     const newStock: StockBatch = {
                       id: stockId,
                       productionBatchId: selectedBatch.id,
+                      typeOrigine: 'PR', // Automatiquement PR pour production interne
                       lettre: selectedBatch.nom.charAt(0).toUpperCase(),
                       nom: `Bande ${selectedBatch.nom}`,
                       prixKg: 2500,
@@ -391,6 +392,25 @@ const StockView = ({ data, setData, user }: { data: AppData; setData: (d: AppDat
   const [selectedBatch, setSelectedBatch] = useState<StockBatch | null>(null);
   const [isAddBatchModalOpen, setIsAddBatchModalOpen] = useState(false);
 
+  // Calcul du prochain numéro de bague automatique respectant le préfixe
+  const nextChickenNumero = useMemo(() => {
+    if (!selectedBatch) return '';
+    const letter = selectedBatch.lettre || 'S';
+    const prefix = selectedBatch.typeOrigine || 'PR';
+    
+    // On extrait tous les nombres des matricules existants correspondants au lot
+    const numbers = selectedBatch.poulets.map(p => {
+      // On cherche les numéros qui finissent par 3 chiffres (PR-A001 -> 001)
+      const match = p.numero.match(/(?:PR|IM)-\w(\d{3})/);
+      return match ? parseInt(match[1], 10) : 0;
+    });
+    
+    const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+    const nextNum = (maxNum + 1).toString().padStart(3, '0');
+    
+    return `${prefix}-${letter}${nextNum}`;
+  }, [selectedBatch]);
+
   const handleCreateBatch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (user.role !== 'admin') return;
@@ -398,6 +418,7 @@ const StockView = ({ data, setData, user }: { data: AppData; setData: (d: AppDat
     const newBatch: StockBatch = {
       id: crypto.randomUUID(),
       nom: f.get('nom') as string,
+      typeOrigine: (f.get('typeOrigine') as 'PR' | 'IM') || 'PR',
       lettre: (f.get('lettre') as string || 'S').toUpperCase(),
       prixKg: Number(f.get('prixKg')) || 2500,
       coutInitial: Number(f.get('cout')) || 0,
@@ -412,9 +433,10 @@ const StockView = ({ data, setData, user }: { data: AppData; setData: (d: AppDat
     e.preventDefault();
     if (!selectedBatch) return;
     const f = new FormData(e.currentTarget);
+    
     const newChicken: Chicken = {
       id: crypto.randomUUID(),
-      numero: f.get('numero') as string,
+      numero: nextChickenNumero, // Utilisation du matricule calculé (PR-A001 ou IM-B001)
       poids: Number(f.get('poids')),
       prix: Number(f.get('prix')),
       vendu: false
@@ -441,10 +463,17 @@ const StockView = ({ data, setData, user }: { data: AppData; setData: (d: AppDat
         {data.stockBatches.map(batch => (
           <div key={batch.id} className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex justify-between items-center cursor-pointer active:bg-gray-50 transition-colors" onClick={() => setSelectedBatch(batch)}>
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center font-black text-xl">{batch.lettre}</div>
+              <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center font-black text-sm">
+                {batch.typeOrigine}-{batch.lettre}
+              </div>
               <div>
                 <h3 className="font-bold text-gray-800">{batch.nom}</h3>
-                <p className="text-xs text-gray-400">{batch.poulets.filter(p => !p.vendu).length} poulets disponibles</p>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${batch.typeOrigine === 'PR' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {batch.typeOrigine === 'PR' ? 'PRODUCTION' : 'IMPORTATION'}
+                  </span>
+                  <p className="text-[10px] text-gray-400">{batch.poulets.filter(p => !p.vendu).length} disponibles</p>
+                </div>
               </div>
             </div>
             <ChevronRight className="text-gray-300" />
@@ -454,6 +483,19 @@ const StockView = ({ data, setData, user }: { data: AppData; setData: (d: AppDat
 
       <Modal isOpen={isAddBatchModalOpen} onClose={() => setIsAddBatchModalOpen(false)} title="Nouveau Lot de Stock">
         <form onSubmit={handleCreateBatch} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Origine du Lot</label>
+            <div className="grid grid-cols-2 gap-2 bg-gray-50 p-1 rounded-2xl border">
+              <label className="cursor-pointer">
+                <input type="radio" name="typeOrigine" value="PR" defaultChecked className="hidden peer" />
+                <div className="text-center py-2 text-xs font-bold rounded-xl peer-checked:bg-white peer-checked:shadow-sm peer-checked:text-orange-600 text-gray-400 transition-all">Production (PR)</div>
+              </label>
+              <label className="cursor-pointer">
+                <input type="radio" name="typeOrigine" value="IM" className="hidden peer" />
+                <div className="text-center py-2 text-xs font-bold rounded-xl peer-checked:bg-white peer-checked:shadow-sm peer-checked:text-orange-600 text-gray-400 transition-all">Importation (IM)</div>
+              </label>
+            </div>
+          </div>
           <input name="nom" required placeholder="Nom du lot (ex: Lot Poulets Adultes)" className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" />
           <div className="grid grid-cols-2 gap-4">
             <input name="lettre" maxLength={1} placeholder="Lettre (ex: A, B, C)" className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" />
@@ -468,18 +510,25 @@ const StockView = ({ data, setData, user }: { data: AppData; setData: (d: AppDat
         {selectedBatch && (
           <div className="space-y-6">
             <form onSubmit={handleAddChicken} className="bg-orange-50 p-4 rounded-3xl grid grid-cols-2 gap-2">
-              <input name="numero" required placeholder="N° / Bague" className="p-3 border rounded-xl text-sm outline-none" />
+              <div className="col-span-2">
+                <label className="text-[10px] font-black text-orange-400 uppercase ml-1">N° Matricule Automatique ({selectedBatch.typeOrigine})</label>
+                <div className="p-3 bg-white border border-orange-200 rounded-xl text-sm font-black text-gray-900 tracking-widest text-center shadow-inner">
+                  {nextChickenNumero}
+                </div>
+              </div>
               <input name="poids" type="number" step="0.01" required placeholder="Poids (kg)" className="p-3 border rounded-xl text-sm outline-none" />
-              <input name="prix" type="number" required placeholder="Prix Vente (Frs)" className="col-span-2 p-3 border rounded-xl text-sm outline-none" />
+              <input name="prix" type="number" required placeholder="Prix Vente (Frs)" className="p-3 border rounded-xl text-sm outline-none" />
               <button type="submit" className="col-span-2 bg-orange-600 text-white p-3 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform">Ajouter au stock</button>
             </form>
 
             <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
               <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1 mb-2">Contenu du Stock</h4>
               {selectedBatch.poulets.length === 0 && <p className="text-center text-xs text-gray-300 py-4 italic">Aucun poulet dans ce lot</p>}
-              {selectedBatch.poulets.map(p => (
+              {selectedBatch.poulets.slice().reverse().map(p => (
                 <div key={p.id} className={`flex justify-between items-center p-3 border rounded-2xl ${p.vendu ? 'bg-gray-50 opacity-50' : 'bg-white border-gray-100 shadow-sm'}`}>
-                  <div className="text-sm font-bold">#{p.numero} - {p.poids}kg</div>
+                  <div className="text-sm font-bold tracking-tight text-gray-700">
+                    <span className="text-orange-600">{p.numero}</span> <span className="text-gray-300 mx-1">|</span> {p.poids}kg
+                  </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-black text-gray-700">{p.prix} F</span>
                     {p.vendu ? (
@@ -634,7 +683,7 @@ const VentesView = ({ data, setData }: { data: AppData; setData: (d: AppData) =>
                     className="w-5 h-5 accent-orange-600"
                   />
                   <div className="flex-1">
-                    <div className="font-bold">#{p.numero} - {p.poids}kg</div>
+                    <div className="font-bold">{p.numero} - {p.poids}kg</div>
                     <div className="text-[9px] text-gray-400">{p.batchName}</div>
                   </div>
                   <div className="font-black text-orange-600 text-sm">{p.prix} F</div>
@@ -802,9 +851,14 @@ const RapportView = ({ data, setData, user }: { data: AppData; setData: (d: AppD
             <div className="flex justify-between items-start">
                 <div>
                     <h3 className="font-black text-lg text-gray-800">{sum.sb.nom}</h3>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-                        {sum.prod ? 'Production Interne' : 'Stock Importé'}
-                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${sum.sb.typeOrigine === 'PR' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {sum.sb.typeOrigine === 'PR' ? 'PRODUCTION' : 'IMPORTATION'}
+                      </span>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                          {sum.prod ? 'Interne' : 'Externe'}
+                      </p>
+                    </div>
                 </div>
                 <div className={`text-[10px] font-black px-3 py-1 rounded-full ${sum.sb.isFinalized ? 'bg-gray-100 text-gray-400' : 'bg-orange-100 text-orange-600'}`}>
                     {sum.sb.isFinalized ? 'CLÔTURÉ' : 'ACTIF'}
@@ -841,6 +895,7 @@ const RapportView = ({ data, setData, user }: { data: AppData; setData: (d: AppD
         {previewBatch && (
           <div className="space-y-6">
             <div className="bg-gray-50 p-6 rounded-3xl space-y-3">
+              <div className="flex justify-between text-xs"><span>Origine :</span><span className="font-bold">{previewBatch.sb.typeOrigine === 'PR' ? 'Production Interne' : 'Importation'}</span></div>
               <div className="flex justify-between text-xs"><span>Quantité initiale :</span><span className="font-bold">{previewBatch.initialCount} poulets</span></div>
               <div className="flex justify-between text-xs"><span>Pertes (Mortalité) :</span><span className="font-bold text-red-500">{previewBatch.mortality} poulets</span></div>
               <div className="flex justify-between text-xs border-t pt-2"><span>Total vendus :</span><span className="font-bold text-green-600">{previewBatch.sb.poulets.filter((p:any) => p.vendu).length} poulets</span></div>
