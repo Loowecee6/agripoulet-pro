@@ -387,8 +387,26 @@ const ProductionView = ({ data, setData, user }: { data: AppData; setData: (d: A
   );
 };
 
-const StockView = ({ data, setData }: { data: AppData; setData: (d: AppData) => void }) => {
+const StockView = ({ data, setData, user }: { data: AppData; setData: (d: AppData) => void; user: User }) => {
   const [selectedBatch, setSelectedBatch] = useState<StockBatch | null>(null);
+  const [isAddBatchModalOpen, setIsAddBatchModalOpen] = useState(false);
+
+  const handleCreateBatch = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (user.role !== 'admin') return;
+    const f = new FormData(e.currentTarget);
+    const newBatch: StockBatch = {
+      id: crypto.randomUUID(),
+      nom: f.get('nom') as string,
+      lettre: (f.get('lettre') as string || 'S').toUpperCase(),
+      prixKg: Number(f.get('prixKg')) || 2500,
+      coutInitial: Number(f.get('cout')) || 0,
+      poulets: [],
+      isFinalized: false
+    };
+    setData({ ...data, stockBatches: [newBatch, ...data.stockBatches] });
+    setIsAddBatchModalOpen(false);
+  };
 
   const handleAddChicken = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -412,7 +430,13 @@ const StockView = ({ data, setData }: { data: AppData; setData: (d: AppData) => 
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold">Gestion des Stocks</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold">Gestion des Stocks</h2>
+        {user.role === 'admin' && (
+          <button onClick={() => setIsAddBatchModalOpen(true)} className="bg-orange-600 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-transform"><Plus /></button>
+        )}
+      </div>
+
       <div className="grid gap-4">
         {data.stockBatches.map(batch => (
           <div key={batch.id} className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex justify-between items-center cursor-pointer active:bg-gray-50 transition-colors" onClick={() => setSelectedBatch(batch)}>
@@ -427,6 +451,18 @@ const StockView = ({ data, setData }: { data: AppData; setData: (d: AppData) => 
           </div>
         ))}
       </div>
+
+      <Modal isOpen={isAddBatchModalOpen} onClose={() => setIsAddBatchModalOpen(false)} title="Nouveau Lot de Stock">
+        <form onSubmit={handleCreateBatch} className="space-y-4">
+          <input name="nom" required placeholder="Nom du lot (ex: Lot Poulets Adultes)" className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" />
+          <div className="grid grid-cols-2 gap-4">
+            <input name="lettre" maxLength={1} placeholder="Lettre (ex: A, B, C)" className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" />
+            <input name="prixKg" type="number" placeholder="Prix/Kg (défaut: 2500)" className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" />
+          </div>
+          <input name="cout" type="number" placeholder="Coût d'achat total (si applicable)" className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" />
+          <button type="submit" className="w-full bg-orange-600 text-white p-4 rounded-2xl font-bold shadow-lg shadow-orange-100">Créer le lot</button>
+        </form>
+      </Modal>
 
       <Modal isOpen={!!selectedBatch} onClose={() => setSelectedBatch(null)} title={selectedBatch?.nom || ""}>
         {selectedBatch && (
@@ -462,6 +498,20 @@ const StockView = ({ data, setData }: { data: AppData; setData: (d: AppData) => 
                 </div>
               ))}
             </div>
+            
+            {user.role === 'admin' && !selectedBatch.isFinalized && (
+              <button 
+                onClick={() => {
+                   if(confirm("Supprimer complètement ce lot de stock ?")) {
+                     setData({ ...data, stockBatches: data.stockBatches.filter(b => b.id !== selectedBatch.id) });
+                     setSelectedBatch(null);
+                   }
+                }}
+                className="w-full p-3 text-red-500 text-[10px] font-bold uppercase tracking-widest"
+              >
+                Supprimer le lot
+              </button>
+            )}
           </div>
         )}
       </Modal>
@@ -980,7 +1030,7 @@ export default function App() {
       <Header user={currentUser} onLogout={() => setCurrentUser(null)} notifications={notifications} isSyncing={isSyncing} />
       <main className="flex-1 p-4 pb-24 overflow-y-auto scroll-smooth">
         {data && activeTab === 'production' && <ProductionView data={data} setData={updateData} user={currentUser} />}
-        {data && activeTab === 'stock' && <StockView data={data} setData={updateData} />}
+        {data && activeTab === 'stock' && <StockView data={data} setData={updateData} user={currentUser} />}
         {data && activeTab === 'ventes' && <VentesView data={data} setData={updateData} />}
         {data && activeTab === 'clients' && <ClientsView data={data} setData={updateData} />}
         {data && activeTab === 'rapport' && <RapportView data={data} setData={updateData} user={currentUser} />}
