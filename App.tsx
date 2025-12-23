@@ -6,7 +6,8 @@ import {
   Calendar, Weight, Coins, TrendingUp, History, Info, Search,
   Bell, Edit2, X, Filter, LayoutGrid, Receipt, Share2, Eye, FileText,
   Archive, MessageSquare, CloudSync, ShieldCheck, User as UserIcon,
-  RefreshCw, Loader2, Lock, KeyRound
+  RefreshCw, Loader2, Lock, KeyRound, ShoppingBag, MinusCircle,
+  FileSearch, Printer, Download
 } from 'lucide-react';
 import { 
   ProductionBatch, StockBatch, Client, Sale, AppData, User, UserRole,
@@ -360,7 +361,7 @@ const ProductionView = ({ data, setData, user }: { data: AppData; setData: (d: A
                     const newStock: StockBatch = {
                       id: stockId,
                       productionBatchId: selectedBatch.id,
-                      typeOrigine: 'PR', // Automatiquement PR pour production interne
+                      typeOrigine: 'PR',
                       lettre: selectedBatch.nom.charAt(0).toUpperCase(),
                       nom: `Bande ${selectedBatch.nom}`,
                       prixKg: 2500,
@@ -391,23 +392,21 @@ const ProductionView = ({ data, setData, user }: { data: AppData; setData: (d: A
 const StockView = ({ data, setData, user }: { data: AppData; setData: (d: AppData) => void; user: User }) => {
   const [selectedBatch, setSelectedBatch] = useState<StockBatch | null>(null);
   const [isAddBatchModalOpen, setIsAddBatchModalOpen] = useState(false);
+  
+  // États locaux pour le calcul automatique réciproque
+  const [tempPoids, setTempPoids] = useState<string>('');
+  const [tempPrix, setTempPrix] = useState<string>('');
 
-  // Calcul du prochain numéro de bague automatique respectant le préfixe
   const nextChickenNumero = useMemo(() => {
     if (!selectedBatch) return '';
     const letter = selectedBatch.lettre || 'S';
     const prefix = selectedBatch.typeOrigine || 'PR';
-    
-    // On extrait tous les nombres des matricules existants correspondants au lot
     const numbers = selectedBatch.poulets.map(p => {
-      // On cherche les numéros qui finissent par 3 chiffres (PR-A001 -> 001)
       const match = p.numero.match(/(?:PR|IM)-\w(\d{3})/);
       return match ? parseInt(match[1], 10) : 0;
     });
-    
     const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
     const nextNum = (maxNum + 1).toString().padStart(3, '0');
-    
     return `${prefix}-${letter}${nextNum}`;
   }, [selectedBatch]);
 
@@ -429,16 +428,40 @@ const StockView = ({ data, setData, user }: { data: AppData; setData: (d: AppDat
     setIsAddBatchModalOpen(false);
   };
 
+  const handlePoidsChange = (val: string) => {
+    setTempPoids(val);
+    if (!selectedBatch || !val || isNaN(Number(val))) {
+      setTempPrix('');
+      return;
+    }
+    const calculatedPrix = Math.round(Number(val) * selectedBatch.prixKg);
+    setTempPrix(calculatedPrix.toString());
+  };
+
+  const handlePrixChange = (val: string) => {
+    setTempPrix(val);
+    if (!selectedBatch || !val || isNaN(Number(val))) {
+      setTempPoids('');
+      return;
+    }
+    const calculatedPoids = Number(val) / selectedBatch.prixKg;
+    setTempPoids(calculatedPoids.toFixed(2));
+  };
+
   const handleAddChicken = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedBatch) return;
-    const f = new FormData(e.currentTarget);
+    
+    const p = Number(tempPoids);
+    const pr = Number(tempPrix);
+
+    if (!p || !pr) return alert("Le poids et le prix doivent être renseignés.");
     
     const newChicken: Chicken = {
       id: crypto.randomUUID(),
-      numero: nextChickenNumero, // Utilisation du matricule calculé (PR-A001 ou IM-B001)
-      poids: Number(f.get('poids')),
-      prix: Number(f.get('prix')),
+      numero: nextChickenNumero,
+      poids: p,
+      prix: pr,
       vendu: false
     };
     const updatedBatch = { ...selectedBatch, poulets: [...selectedBatch.poulets, newChicken] };
@@ -447,6 +470,8 @@ const StockView = ({ data, setData, user }: { data: AppData; setData: (d: AppDat
       stockBatches: data.stockBatches.map(b => b.id === updatedBatch.id ? updatedBatch : b)
     });
     setSelectedBatch(updatedBatch);
+    setTempPoids('');
+    setTempPrix('');
     e.currentTarget.reset();
   };
 
@@ -506,7 +531,7 @@ const StockView = ({ data, setData, user }: { data: AppData; setData: (d: AppDat
         </form>
       </Modal>
 
-      <Modal isOpen={!!selectedBatch} onClose={() => setSelectedBatch(null)} title={selectedBatch?.nom || ""}>
+      <Modal isOpen={!!selectedBatch} onClose={() => { setSelectedBatch(null); setTempPoids(''); setTempPrix(''); }} title={selectedBatch?.nom || ""}>
         {selectedBatch && (
           <div className="space-y-6">
             <form onSubmit={handleAddChicken} className="bg-orange-50 p-4 rounded-3xl grid grid-cols-2 gap-2">
@@ -516,9 +541,29 @@ const StockView = ({ data, setData, user }: { data: AppData; setData: (d: AppDat
                   {nextChickenNumero}
                 </div>
               </div>
-              <input name="poids" type="number" step="0.01" required placeholder="Poids (kg)" className="p-3 border rounded-xl text-sm outline-none" />
-              <input name="prix" type="number" required placeholder="Prix Vente (Frs)" className="p-3 border rounded-xl text-sm outline-none" />
-              <button type="submit" className="col-span-2 bg-orange-600 text-white p-3 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform">Ajouter au stock</button>
+              <div className="space-y-1">
+                <label className="text-[9px] text-gray-400 font-bold ml-1 uppercase">Poids (kg)</label>
+                <input 
+                  value={tempPoids}
+                  onChange={(e) => handlePoidsChange(e.target.value)}
+                  type="number" 
+                  step="0.01" 
+                  placeholder="Poids (kg)" 
+                  className="w-full p-3 border rounded-xl text-sm outline-none bg-white" 
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] text-gray-400 font-bold ml-1 uppercase">Prix Vente (Frs)</label>
+                <input 
+                  value={tempPrix}
+                  onChange={(e) => handlePrixChange(e.target.value)}
+                  type="number" 
+                  placeholder="Prix Vente (Frs)" 
+                  className="w-full p-3 border rounded-xl text-sm outline-none bg-white" 
+                />
+              </div>
+              <p className="col-span-2 text-[8px] text-orange-400 italic text-center">Calculé sur la base de {selectedBatch.prixKg} F/kg</p>
+              <button type="submit" className="col-span-2 bg-orange-600 text-white p-3 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform mt-2">Ajouter au stock</button>
             </form>
 
             <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
@@ -570,30 +615,62 @@ const StockView = ({ data, setData, user }: { data: AppData; setData: (d: AppDat
 
 const VentesView = ({ data, setData }: { data: AppData; setData: (d: AppData) => void }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [selectedPoulets, setSelectedPoulets] = useState<string[]>([]);
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [search, setSearch] = useState('');
+  
+  // États pour la création d'une vente
+  const [selectedBatchId, setSelectedBatchId] = useState<string>('');
+  const [basket, setBasket] = useState<Chicken[]>([]);
+  const [priceInput, setPriceInput] = useState<string>('');
 
-  const availablePoulets = useMemo(() => {
-    return data.stockBatches.flatMap(b => b.poulets.filter(p => !p.vendu).map(p => ({ ...p, batchName: b.nom })));
+  const availableBatches = useMemo(() => {
+    return data.stockBatches.filter(b => b.poulets.some(p => !p.vendu));
   }, [data.stockBatches]);
+
+  const handleAddToBasket = () => {
+    if (!selectedBatchId) return alert("Choisissez d'abord un lot de stock.");
+    if (!priceInput) return;
+
+    const targetBatch = data.stockBatches.find(b => b.id === selectedBatchId);
+    if (!targetBatch) return;
+
+    const targetPrice = Number(priceInput);
+    const foundChicken = targetBatch.poulets.find(p => 
+      !p.vendu && 
+      p.prix === targetPrice && 
+      !basket.some(bp => bp.id === p.id)
+    );
+
+    if (foundChicken) {
+      setBasket([...basket, foundChicken]);
+      setPriceInput('');
+    } else {
+      alert(`Aucun poulet disponible à ${targetPrice} Frs dans ce lot.`);
+    }
+  };
+
+  const handleRemoveFromBasket = (id: string) => {
+    setBasket(basket.filter(p => p.id !== id));
+  };
 
   const handleAddSale = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (selectedPoulets.length === 0) return alert("Sélectionnez au moins un poulet.");
+    if (basket.length === 0) return alert("Votre panier est vide.");
     
     const f = new FormData(e.currentTarget);
     const clientId = f.get('clientId') as string;
     const client = data.clients.find(c => c.id === clientId);
     if (!client) return alert("Veuillez sélectionner un client.");
 
-    const total = availablePoulets.filter(p => selectedPoulets.includes(p.id)).reduce((a, b) => a + b.prix, 0);
+    const basketIds = basket.map(p => p.id);
+    const total = basket.reduce((acc, p) => acc + p.prix, 0);
     const isCredit = f.get('isCredit') === 'on';
 
     const newSale: Sale = {
       id: crypto.randomUUID(),
       clientId: client.id,
       clientNom: client.nom,
-      pouletIds: selectedPoulets,
+      pouletIds: basketIds,
       total: total,
       isCredit: isCredit,
       dueDate: isCredit ? f.get('dueDate') as string : undefined,
@@ -603,7 +680,7 @@ const VentesView = ({ data, setData }: { data: AppData; setData: (d: AppData) =>
 
     const updatedStock = data.stockBatches.map(b => ({
       ...b,
-      poulets: b.poulets.map(p => selectedPoulets.includes(p.id) ? { ...p, vendu: true } : p)
+      poulets: b.poulets.map(p => basketIds.includes(p.id) ? { ...p, vendu: true } : p)
     }));
 
     setData({
@@ -613,10 +690,22 @@ const VentesView = ({ data, setData }: { data: AppData; setData: (d: AppData) =>
     });
 
     setIsAddModalOpen(false);
-    setSelectedPoulets([]);
+    setBasket([]);
+    setSelectedBatchId('');
   };
 
   const filteredSales = data.sales.filter(s => s.clientNom.toLowerCase().includes(search.toLowerCase()));
+
+  // Récupération des détails d'un poulet à partir des batches (optimisé)
+  const getSaleChickens = (pouletIds: string[]) => {
+    const details: Chicken[] = [];
+    data.stockBatches.forEach(batch => {
+      batch.poulets.forEach(p => {
+        if (pouletIds.includes(p.id)) details.push(p);
+      });
+    });
+    return details;
+  };
 
   return (
     <div className="space-y-6">
@@ -629,7 +718,11 @@ const VentesView = ({ data, setData }: { data: AppData; setData: (d: AppData) =>
 
       <div className="space-y-4">
         {filteredSales.map(s => (
-          <div key={s.id} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex justify-between items-center">
+          <div 
+            key={s.id} 
+            className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex justify-between items-center cursor-pointer active:bg-gray-50 transition-colors"
+            onClick={() => setSelectedSale(s)}
+          >
              <div>
                <div className="font-bold text-gray-800">{s.clientNom}</div>
                <div className="text-[10px] text-gray-400">{new Date(s.dateVente).toLocaleDateString()} • {s.pouletIds.length} poulet(s)</div>
@@ -639,77 +732,198 @@ const VentesView = ({ data, setData }: { data: AppData; setData: (d: AppData) =>
                  </div>
                )}
              </div>
-             <div className="text-right">
-               <div className="font-black text-orange-600">{s.total} F</div>
-               {s.isCredit && !s.isPaid && (
-                 <button 
-                  onClick={() => {
-                    if(confirm("Confirmer le paiement de ce crédit ?")) {
-                      setData({ ...data, sales: data.sales.map(sale => sale.id === s.id ? { ...sale, isPaid: true } : sale) });
-                    }
-                  }}
-                  className="text-[10px] font-bold text-blue-600 underline block mt-1"
-                 >Marquer payé</button>
-               )}
+             <div className="flex items-center gap-3">
+               <div className="text-right">
+                 <div className="font-black text-orange-600">{s.total} F</div>
+               </div>
+               <ChevronRight className="w-4 h-4 text-gray-300" />
              </div>
           </div>
         ))}
         {filteredSales.length === 0 && <p className="text-center text-sm text-gray-400 py-10">Aucune vente enregistrée</p>}
       </div>
 
-      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Nouvelle Vente">
+      <Modal isOpen={isAddModalOpen} onClose={() => { setIsAddModalOpen(false); setBasket([]); setSelectedBatchId(''); }} title="Nouvelle Vente">
         <form onSubmit={handleAddSale} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Client</label>
+            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Client *</label>
             <select name="clientId" required className="w-full p-4 border rounded-2xl bg-gray-50 outline-none text-sm appearance-none">
-              <option value="">Sélectionner un client</option>
+              <option value="">Choisir un client</option>
               {data.clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
             </select>
           </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Lot de Stock *</label>
+            <select 
+              value={selectedBatchId}
+              onChange={(e) => { setSelectedBatchId(e.target.value); setBasket([]); }}
+              required 
+              className="w-full p-4 border rounded-2xl bg-gray-50 outline-none text-sm appearance-none"
+            >
+              <option value="">Sélectionner le stock source</option>
+              {availableBatches.map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.nom} ({b.poulets.filter(p => !p.vendu).length} dispos)
+                </option>
+              ))}
+            </select>
+          </div>
           
+          <div className="bg-orange-50 p-4 rounded-3xl space-y-3 border border-orange-100 shadow-sm">
+            <label className="text-[10px] font-black text-orange-400 uppercase ml-1">Ajouter un poulet (Saisie Prix)</label>
+            <div className="flex gap-2">
+              <input 
+                type="number" 
+                value={priceInput}
+                onChange={(e) => setPriceInput(e.target.value)}
+                placeholder="Entrez le prix exact (ex: 3500)" 
+                className="flex-1 p-4 border rounded-2xl bg-white outline-none text-sm font-bold"
+              />
+              <button 
+                type="button"
+                onClick={handleAddToBasket}
+                className="bg-orange-600 text-white p-4 rounded-2xl active:scale-95 transition-transform shadow-md"
+              >
+                <Plus className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Poulets disponibles ({availablePoulets.length})</label>
+            <div className="flex items-center justify-between px-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase">Panier de vente ({basket.length})</label>
+              {basket.length > 0 && <button type="button" onClick={() => setBasket([])} className="text-[9px] text-red-500 font-bold uppercase">Vider</button>}
+            </div>
             <div className="max-h-56 overflow-y-auto border border-gray-100 rounded-2xl p-2 bg-gray-50 space-y-1">
-              {availablePoulets.length === 0 && <p className="text-center text-xs text-gray-400 py-4">Aucun poulet disponible en stock</p>}
-              {availablePoulets.map(p => (
-                <label key={p.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 text-xs shadow-sm cursor-pointer active:scale-[0.98] transition-transform">
-                  <input 
-                    type="checkbox" 
-                    checked={selectedPoulets.includes(p.id)}
-                    onChange={(e) => {
-                      if (e.target.checked) setSelectedPoulets([...selectedPoulets, p.id]);
-                      else setSelectedPoulets(selectedPoulets.filter(id => id !== p.id));
-                    }}
-                    className="w-5 h-5 accent-orange-600"
-                  />
+              {basket.length === 0 && <p className="text-center text-xs text-gray-400 py-6 italic">Aucun poulet sélectionné</p>}
+              {basket.map(p => (
+                <div key={p.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 text-xs shadow-sm">
+                  <ShoppingBag className="w-4 h-4 text-orange-400" />
                   <div className="flex-1">
-                    <div className="font-bold">{p.numero} - {p.poids}kg</div>
-                    <div className="text-[9px] text-gray-400">{p.batchName}</div>
+                    <div className="font-bold">{p.numero}</div>
+                    <div className="text-[9px] text-gray-400">{p.poids} kg</div>
                   </div>
                   <div className="font-black text-orange-600 text-sm">{p.prix} F</div>
-                </label>
+                  <button type="button" onClick={() => handleRemoveFromBasket(p.id)} className="text-gray-300 hover:text-red-500 ml-1">
+                    <MinusCircle className="w-4 h-4" />
+                  </button>
+                </div>
               ))}
             </div>
           </div>
 
-          <div className="p-4 bg-orange-50 rounded-3xl space-y-3 border border-orange-100 shadow-inner">
+          <div className="p-4 bg-white rounded-3xl space-y-3 border border-gray-100 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-orange-900">Vente à crédit ?</span>
+              <span className="text-sm font-bold text-gray-700">Vente à crédit ?</span>
               <input name="isCredit" type="checkbox" className="w-6 h-6 accent-orange-600" />
             </div>
             <div className="space-y-1">
-              <label className="text-[9px] text-orange-400 font-black ml-1 uppercase">Date d'échéance du crédit</label>
-              <input name="dueDate" type="date" className="w-full p-3 border rounded-xl text-sm outline-none bg-white" />
+              <label className="text-[9px] text-gray-400 font-black ml-1 uppercase">Date d'échéance du crédit</label>
+              <input name="dueDate" type="date" className="w-full p-3 border rounded-xl text-sm outline-none bg-gray-50" />
             </div>
           </div>
 
           <div className="flex justify-between items-center px-4 py-2 bg-gray-900 text-white rounded-2xl">
-            <div className="text-[10px] font-black uppercase tracking-widest opacity-50">TOTAL</div>
-            <div className="text-xl font-black">{availablePoulets.filter(p => selectedPoulets.includes(p.id)).reduce((a, b) => a + b.prix, 0)} Frs</div>
+            <div className="text-[10px] font-black uppercase tracking-widest opacity-50">TOTAL À PAYER</div>
+            <div className="text-xl font-black">{basket.reduce((acc, p) => acc + p.prix, 0)} Frs</div>
           </div>
 
-          <button type="submit" className="w-full bg-orange-600 text-white p-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-orange-100 active:scale-95 transition-transform">Valider la commande</button>
+          <button 
+            type="submit" 
+            disabled={basket.length === 0}
+            className={`w-full p-5 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-transform mt-2 ${basket.length > 0 ? 'bg-orange-600 text-white shadow-orange-100' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+          >
+            Valider la commande
+          </button>
         </form>
+      </Modal>
+
+      {/* Modal Détails Vente / Facture */}
+      <Modal isOpen={!!selectedSale} onClose={() => setSelectedSale(null)} title="Détails de la Vente">
+        {selectedSale && (
+          <div className="space-y-6">
+            <div className="bg-white border-2 border-dashed border-gray-200 p-6 rounded-[2rem] shadow-sm relative overflow-hidden">
+               {/* Watermark/Status */}
+               <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.05] pointer-events-none select-none -rotate-12`}>
+                 <span className="text-7xl font-black uppercase">{selectedSale.isPaid ? 'PAYÉ' : 'CRÉDIT'}</span>
+               </div>
+
+               <div className="flex justify-between items-start mb-6">
+                 <div>
+                   <h3 className="text-[10px] font-black text-orange-600 uppercase tracking-[0.2em] mb-1">Facture / Reçu</h3>
+                   <div className="text-xl font-black text-gray-900">{selectedSale.clientNom}</div>
+                   <div className="text-[10px] text-gray-400 font-bold">{new Date(selectedSale.dateVente).toLocaleString()}</div>
+                 </div>
+                 <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center text-white">
+                   <Receipt className="w-6 h-6" />
+                 </div>
+               </div>
+
+               <div className="space-y-3 mb-6">
+                 <div className="grid grid-cols-3 text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">
+                   <span>Réf / Matricule</span>
+                   <span className="text-center">Poids</span>
+                   <span className="text-right">Prix</span>
+                 </div>
+                 <div className="h-px bg-gray-100" />
+                 {getSaleChickens(selectedSale.pouletIds).map(p => (
+                   <div key={p.id} className="grid grid-cols-3 items-center px-1 text-sm">
+                     <span className="font-bold text-gray-700">{p.numero}</span>
+                     <span className="text-center text-gray-500">{p.poids} kg</span>
+                     <span className="text-right font-black text-orange-600">{p.prix} F</span>
+                   </div>
+                 ))}
+               </div>
+
+               <div className="h-px bg-gray-100 mb-4" />
+
+               <div className="flex justify-between items-end">
+                 <div>
+                   <div className="text-[9px] font-black text-gray-400 uppercase mb-1">Statut Paiement</div>
+                   <div className={`text-xs font-black px-3 py-1 rounded-full inline-block ${selectedSale.isPaid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                     {selectedSale.isPaid ? 'PAYÉ COMPTANT' : 'À CRÉDIT'}
+                   </div>
+                   {selectedSale.isCredit && !selectedSale.isPaid && selectedSale.dueDate && (
+                     <div className="text-[9px] text-red-400 mt-1 font-bold">Échéance: {new Date(selectedSale.dueDate).toLocaleDateString()}</div>
+                   )}
+                 </div>
+                 <div className="text-right">
+                   <div className="text-[9px] font-black text-gray-400 uppercase mb-1">Total Général</div>
+                   <div className="text-2xl font-black text-gray-900">{selectedSale.total} Frs</div>
+                 </div>
+               </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-center gap-3">
+                <Info className="w-5 h-5 text-blue-500 shrink-0" />
+                <p className="text-[10px] text-blue-700 font-medium">Capturez l'écran pour envoyer cette facture à votre client via WhatsApp ou SMS.</p>
+              </div>
+
+              {selectedSale.isCredit && !selectedSale.isPaid && (
+                <button 
+                  onClick={() => {
+                    if(confirm("Confirmer le paiement total de cette facture ?")) {
+                      setData({ ...data, sales: data.sales.map(s => s.id === selectedSale.id ? { ...s, isPaid: true } : s) });
+                      setSelectedSale({ ...selectedSale, isPaid: true });
+                    }
+                  }}
+                  className="w-full bg-green-600 text-white p-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-green-100 active:scale-95 transition-transform flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 className="w-5 h-5" /> Marquer comme payée
+                </button>
+              )}
+              
+              <button 
+                onClick={() => setSelectedSale(null)}
+                className="w-full bg-gray-100 text-gray-500 p-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-transform"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
@@ -717,6 +931,7 @@ const VentesView = ({ data, setData }: { data: AppData; setData: (d: AppData) =>
 
 const ClientsView = ({ data, setData }: { data: AppData; setData: (d: AppData) => void }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [search, setSearch] = useState('');
 
   const filtered = data.clients.filter(c => c.nom.toLowerCase().includes(search.toLowerCase()) || c.tel.includes(search));
@@ -727,11 +942,29 @@ const ClientsView = ({ data, setData }: { data: AppData; setData: (d: AppData) =
     const newClient: Client = {
       id: crypto.randomUUID(),
       nom: f.get('nom') as string,
-      adresse: f.get('adresse') as string,
-      tel: f.get('tel') as string
+      adresse: f.get('adresse') as string || '',
+      tel: f.get('tel') as string || ''
     };
     setData({ ...data, clients: [...data.clients, newClient] });
     setIsAddModalOpen(false);
+  };
+
+  const handleUpdateClient = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingClient) return;
+    const f = new FormData(e.currentTarget);
+    const updatedClient: Client = {
+      ...editingClient,
+      nom: f.get('nom') as string,
+      adresse: f.get('adresse') as string || '',
+      tel: f.get('tel') as string || ''
+    };
+    setData({ 
+      ...data, 
+      clients: data.clients.map(c => c.id === editingClient.id ? updatedClient : c),
+      sales: data.sales.map(s => s.clientId === editingClient.id ? { ...s, clientNom: updatedClient.nom } : s)
+    });
+    setEditingClient(null);
   };
 
   return (
@@ -750,13 +983,16 @@ const ClientsView = ({ data, setData }: { data: AppData; setData: (d: AppData) =
                <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-2xl flex items-center justify-center shadow-inner"><UserIcon className="w-6 h-6" /></div>
                <div>
                  <div className="font-bold text-gray-800">{c.nom}</div>
-                 <div className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-0.5">{c.tel}</div>
+                 <div className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-0.5">{c.tel || 'Aucun tel.'}</div>
                  <div className="text-[10px] text-gray-400 italic mt-0.5">{c.adresse || 'Sans adresse'}</div>
                </div>
              </div>
-             <button onClick={() => {
-               if(confirm(`Supprimer le client "${c.nom}" ?`)) setData({ ...data, clients: data.clients.filter(cl => cl.id !== c.id) });
-             }} className="p-3 text-gray-300 hover:text-red-500 transition-colors"><Trash2 className="w-5 h-5" /></button>
+             <div className="flex items-center gap-1">
+               <button onClick={() => setEditingClient(c)} className="p-3 text-gray-300 hover:text-orange-500 transition-colors"><Edit2 className="w-5 h-5" /></button>
+               <button onClick={() => {
+                 if(confirm(`Supprimer le client "${c.nom}" ?`)) setData({ ...data, clients: data.clients.filter(cl => cl.id !== c.id) });
+               }} className="p-3 text-gray-300 hover:text-red-500 transition-colors"><Trash2 className="w-5 h-5" /></button>
+             </div>
           </div>
         ))}
         {filtered.length === 0 && <p className="text-center text-sm text-gray-400 py-10">Aucun client trouvé</p>}
@@ -765,12 +1001,12 @@ const ClientsView = ({ data, setData }: { data: AppData; setData: (d: AppData) =
       <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Nouveau Client">
         <form onSubmit={handleAddClient} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Nom Complet</label>
+            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Nom Complet *</label>
             <input name="nom" required placeholder="Ex: Jean Dupont" className="w-full p-4 border rounded-2xl bg-gray-50 outline-none focus:ring-2 focus:ring-orange-500" />
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-black text-gray-400 uppercase ml-1">N° Téléphone</label>
-            <input name="tel" required placeholder="Ex: 06 00 00 00 00" className="w-full p-4 border rounded-2xl bg-gray-50 outline-none focus:ring-2 focus:ring-orange-500" />
+            <input name="tel" placeholder="Ex: 06 00 00 00 00" className="w-full p-4 border rounded-2xl bg-gray-50 outline-none focus:ring-2 focus:ring-orange-500" />
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Adresse de livraison</label>
@@ -778,6 +1014,26 @@ const ClientsView = ({ data, setData }: { data: AppData; setData: (d: AppData) =
           </div>
           <button type="submit" className="w-full bg-orange-600 text-white p-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-orange-100 mt-4 active:scale-95 transition-transform">Enregistrer le client</button>
         </form>
+      </Modal>
+
+      <Modal isOpen={!!editingClient} onClose={() => setEditingClient(null)} title="Modifier Client">
+        {editingClient && (
+          <form onSubmit={handleUpdateClient} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Nom Complet *</label>
+              <input name="nom" required defaultValue={editingClient.nom} className="w-full p-4 border rounded-2xl bg-gray-50 outline-none focus:ring-2 focus:ring-orange-500" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">N° Téléphone</label>
+              <input name="tel" defaultValue={editingClient.tel} className="w-full p-4 border rounded-2xl bg-gray-50 outline-none focus:ring-2 focus:ring-orange-500" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Adresse de livraison</label>
+              <input name="adresse" defaultValue={editingClient.adresse} className="w-full p-4 border rounded-2xl bg-gray-50 outline-none focus:ring-2 focus:ring-orange-500" />
+            </div>
+            <button type="submit" className="w-full bg-gray-900 text-white p-5 rounded-2xl font-black uppercase tracking-widest shadow-xl mt-4 active:scale-95 transition-transform">Mettre à jour la fiche</button>
+          </form>
+        )}
       </Modal>
     </div>
   );
