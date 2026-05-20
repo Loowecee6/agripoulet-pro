@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { useToast } from '../common/ToastContext';
+import { QuickAddGrid } from '../common/QuickAddGrid';
 import { Plus, ChevronRight, ShoppingBag, MinusCircle, CheckCircle2, Receipt, Info } from 'lucide-react';
 import { AppData, Sale, Chicken } from '../../types';
 import { Modal } from '../common/Modal';
@@ -10,6 +12,7 @@ interface VentesViewProps {
 }
 
 export const VentesView = ({ data, setData }: VentesViewProps) => {
+  const { addToast } = useToast();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [search, setSearch] = useState('');
@@ -40,8 +43,9 @@ export const VentesView = ({ data, setData }: VentesViewProps) => {
     if (foundChicken) {
       setBasket([...basket, foundChicken]);
       setPriceInput('');
+      addToast('Poulet ajouté au panier', 'success');
     } else {
-      alert(`Aucun poulet disponible à ${targetPrice} Frs dans ce lot.`);
+      addToast(`Aucun poulet disponible à ${targetPrice} Frs dans ce lot.`, 'error');
     }
   };
 
@@ -51,12 +55,12 @@ export const VentesView = ({ data, setData }: VentesViewProps) => {
 
   const handleAddSale = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (basket.length === 0) return alert("Votre panier est vide.");
+    if (basket.length === 0) return addToast("Votre panier est vide.", 'error');
     
     const f = new FormData(e.currentTarget);
     const clientId = f.get('clientId') as string;
     const client = data.clients.find(c => c.id === clientId);
-    if (!client) return alert("Veuillez sélectionner un client.");
+    if (!client) return addToast("Veuillez sélectionner un client.", 'error');
 
     const basketIds = basket.map(p => p.id);
     const total = basket.reduce((acc, p) => acc + p.prix, 0);
@@ -88,6 +92,7 @@ export const VentesView = ({ data, setData }: VentesViewProps) => {
     setIsAddModalOpen(false);
     setBasket([]);
     setSelectedBatchId('');
+    addToast('Vente enregistrée avec succès', 'success');
   };
 
   const filteredSales = data.sales.filter(s => s.clientNom.toLowerCase().includes(search.toLowerCase()));
@@ -169,20 +174,19 @@ export const VentesView = ({ data, setData }: VentesViewProps) => {
           <div className="bg-orange-50 p-4 rounded-3xl space-y-3 border border-orange-100 shadow-sm">
             <label className="text-[10px] font-black text-orange-400 uppercase ml-1">Ajouter un poulet (Saisie Prix)</label>
             <div className="flex gap-2">
-              <input 
-                type="number" 
-                value={priceInput}
-                onChange={(e) => setPriceInput(e.target.value)}
-                placeholder="Entrez le prix exact (ex: 3500)" 
-                className="flex-1 p-4 border rounded-2xl bg-white outline-none text-sm font-bold"
+              <QuickAddGrid
+                options={[3500, 4000, 4500, 5000]}
+                onSelect={(price) => {
+                  setPriceInput(String(price));
+                  handleAddToBasket();
+                }}
               />
-              <button 
-                type="button"
-                onClick={handleAddToBasket}
-                className="bg-orange-600 text-white p-4 rounded-2xl active:scale-95 transition-transform shadow-md"
-              >
-                <Plus className="w-6 h-6" />
-              </button>
+              {/* Hidden input to retain manual entry if needed */}
+              <input
+                type="hidden"
+                value={priceInput}
+                readOnly
+              />
             </div>
           </div>
 

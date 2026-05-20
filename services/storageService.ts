@@ -1,37 +1,35 @@
 
 import { AppData } from '../types';
+import { db } from './firebaseConfig';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
-const STORAGE_KEY = 'agripoulet_pro_cloud_v1';
-
-const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+const STORAGE_DOC = doc(db, 'appData', 'singleton');
 
 export const storageService = {
   async saveData(data: AppData): Promise<void> {
-    await delay(300); 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    try {
+      await setDoc(STORAGE_DOC, data);
+    } catch (e) {
+      console.error('Error saving data to Firestore', e);
+    }
   },
 
   async loadData(): Promise<AppData> {
-    await delay(500);
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Migration : s'assurer que les settings existent
-        if (!parsed.settings) {
-          parsed.settings = { adminPasswordHash: '1234' };
-        }
-        return parsed;
-      } catch (e) {
-        console.error("Erreur de parsing", e);
+    try {
+      const snap = await getDoc(STORAGE_DOC);
+      if (snap.exists()) {
+        return snap.data() as AppData;
       }
+    } catch (e) {
+      console.error('Error loading data from Firestore', e);
     }
+    // Fallback default data structure
     return {
       productionBatches: [],
       stockBatches: [],
       clients: [],
       sales: [],
-      settings: { adminPasswordHash: '1234' }
+      settings: { adminPasswordHash: '1234' },
     };
-  }
+  },
 };

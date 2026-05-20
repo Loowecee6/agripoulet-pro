@@ -11,6 +11,14 @@ export interface AppSettings {
   adminPasswordHash: string; // Stocké en clair pour cette version simple, ou hashé
 }
 
+export type ToastType = 'success' | 'error' | 'info' | 'warning';
+export interface ToastMessage {
+  id: string;
+  type: ToastType;
+  text: string;
+  duration?: number; // ms, optional defaults to 3000
+}
+
 export interface DailyRecord {
   date: string;
   jourDeBande: number;
