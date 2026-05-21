@@ -1,0 +1,65 @@
+// Export data to XLS (CSV format compatible with Excel)
+export function exportToXLS(filename: string, headers: string[], rows: (string | number)[][]) {
+  // BOM for Excel UTF-8
+  const BOM = '\uFEFF';
+  const csvContent = [
+    headers.join(';'),
+    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';'))
+  ].join('\n');
+
+  const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${filename}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export function exportBatchExpenses(batchName: string, expenses: { libelle: string; montant: number; date: string }[], poussinCost: number, poussinCount: number) {
+  const headers = ['Date', 'Libellé', 'Montant (Frs)'];
+  const rows = expenses.map(e => [e.date, e.libelle, e.montant]);
+
+  // Add summary
+  const totalDepenses = expenses.reduce((a, e) => a + e.montant, 0);
+  const totalPoussins = poussinCount * poussinCost;
+  const totalGeneral = totalDepenses + totalPoussins;
+
+  rows.push([]);
+  rows.push(['', 'Investissement Poussins', totalPoussins]);
+  rows.push([]);
+  rows.push(['', 'TOTAL DÉPENSES', totalDepenses]);
+  rows.push(['', 'TOTAL GÉNÉRAL', totalGeneral]);
+
+  exportToXLS(`Depenses_${batchName}`, headers, rows);
+}
+
+export function exportBatchSummary(batchName: string, summary: {
+  totalInvested: number;
+  totalRevenue: number;
+  profit: number;
+  initialCount: number;
+  mortality: number;
+  soldCount: number;
+  avgWeight: number;
+  costPerKg: number;
+}) {
+  const headers = ['Indicateur', 'Valeur'];
+  const rows = [
+    ['Bande', batchName],
+    ['Poussins initiaux', summary.initialCount],
+    ['Mortalité', summary.mortality],
+    ['Poulets vendus', summary.soldCount],
+    ['Poids moyen (kg)', summary.avgWeight.toFixed(2)],
+    ['', ''],
+    ['Total investi (Frs)', summary.totalInvested],
+    ['Total recettes (Frs)', summary.totalRevenue],
+    ['Coût par kg (Frs)', summary.costPerKg.toFixed(0)],
+    ['', ''],
+    ['RÉSULTAT', summary.profit >= 0 ? `BÉNÉFICE: ${summary.profit} Frs` : `PERTE: ${Math.abs(summary.profit)} Frs`],
+  ];
+
+  exportToXLS(`Bilan_${batchName}`, headers, rows);
+}

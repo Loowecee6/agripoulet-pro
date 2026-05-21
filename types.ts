@@ -25,7 +25,9 @@ export interface DailyRecord {
   mort: number;
   conso: number; // in g
   quantite: number; // in kg
-  poidsReel: number; // in g
+  poidsReel: number; // in g (poids moyen)
+  sampleCount?: number; // nombre de poulets pesés
+  sampleTotalWeight?: number; // poids total de l'échantillon en g
   note?: string;
 }
 

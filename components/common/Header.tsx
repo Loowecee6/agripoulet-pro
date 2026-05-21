@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ClipboardList, CloudSync, ShieldCheck, Bell, LogOut, X, RefreshCw } from 'lucide-react';
+import { ClipboardList, CloudSync, ShieldCheck, Bell, LogOut, X, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
 import { User, Sale } from '../../types';
 
 interface HeaderProps {
@@ -7,9 +7,10 @@ interface HeaderProps {
   onLogout: () => void;
   notifications: Sale[];
   isSyncing: boolean;
+  syncError?: boolean;
 }
 
-export const Header = ({ user, onLogout, notifications, isSyncing }: HeaderProps) => {
+export const Header = ({ user, onLogout, notifications, isSyncing, syncError }: HeaderProps) => {
   const [showNotifs, setShowNotifs] = useState(false);
   return (
     <header className="bg-orange-600 text-white p-4 shadow-lg sticky top-0 z-40">
@@ -23,8 +24,10 @@ export const Header = ({ user, onLogout, notifications, isSyncing }: HeaderProps
               <h1 className="text-lg font-bold leading-none">AgriPoulet Pro</h1>
               {isSyncing ? (
                 <RefreshCw className="w-3 h-3 animate-spin text-orange-200" />
+              ) : syncError ? (
+                <AlertTriangle className="w-3 h-3 text-red-300" />
               ) : (
-                <CloudSync className="w-3 h-3 text-green-300" />
+                <CheckCircle className="w-3 h-3 text-green-300" />
               )}
             </div>
             <p className="text-orange-200 text-[10px] mt-1 flex items-center gap-1">

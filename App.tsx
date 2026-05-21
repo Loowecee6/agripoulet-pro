@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { AppData } from './types';
 import { storageService } from './services/storageService';
@@ -17,27 +17,71 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('production');
   const [data, setData] = useState<AppData | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const pendingSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevBatchCount = useRef(0);
+  const lastAutoBackup = useRef<string>('');
 
   useEffect(() => {
+    if (!user) {
+      setData(null);
+      setIsInitialLoading(false);
+      return;
+    }
     const init = async () => {
-      const cloudData = await storageService.loadData();
+      setIsInitialLoading(true);
+      const cloudData = await storageService.loadData(user.uid);
       setData(cloudData);
+      prevBatchCount.current = cloudData.productionBatches.length;
       setIsInitialLoading(false);
     };
     init();
-  }, []);
+  }, [user]);
+
+  // Auto-backup when significant changes occur
+  useEffect(() => {
+    if (!data || !user || isInitialLoading) return;
+    const currentBatchCount = data.productionBatches.length;
+    const dataKey = JSON.stringify({ batches: currentBatchCount, clients: data.clients.length, sales: data.sales.length });
+
+    if (dataKey !== lastAutoBackup.current) {
+      lastAutoBackup.current = dataKey;
+      // Auto-backup when a new batch is added or removed
+      if (currentBatchCount !== prevBatchCount.current) {
+        const label = `Auto-backup ${new Date().toLocaleString('fr-FR')}`;
+        storageService.createBackup(user.uid, data, label).catch(() => {});
+        prevBatchCount.current = currentBatchCount;
+      }
+    }
+  }, [data, user, isInitialLoading]);
 
   useEffect(() => {
-    if (data && !isInitialLoading) {
-      const sync = async () => {
-        setIsSyncing(true);
-        await storageService.saveData(data);
-        setIsSyncing(false);
-      };
-      sync();
+    if (!data || !user || isInitialLoading) return;
+
+    if (pendingSaveRef.current) {
+      clearTimeout(pendingSaveRef.current);
     }
-  }, [data, isInitialLoading]);
+
+    pendingSaveRef.current = setTimeout(async () => {
+      setIsSyncing(true);
+      setSyncError(false);
+      try {
+        await storageService.saveData(user.uid, data);
+      } catch (e) {
+        console.error('Failed to sync data:', e);
+        setSyncError(true);
+      } finally {
+        setIsSyncing(false);
+      }
+    }, 1000);
+
+    return () => {
+      if (pendingSaveRef.current) {
+        clearTimeout(pendingSaveRef.current);
+      }
+    };
+  }, [data, user, isInitialLoading]);
 
   const notifications = useMemo(() => {
     if (!data) return [];
@@ -66,7 +110,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 max-w-md mx-auto relative shadow-2xl flex flex-col border-x border-gray-100 font-sans selection:bg-orange-100">
-      <Header user={currentUser} onLogout={signOutUser} notifications={notifications} isSyncing={isSyncing} />
+      <Header user={currentUser} onLogout={signOutUser} notifications={notifications} isSyncing={isSyncing} syncError={syncError} />
       <main className="flex-1 p-4 pb-24 overflow-y-auto scroll-smooth">
         {data && activeTab === 'production' && <ProductionView data={data} setData={updateData} user={currentUser} />}
         {data && activeTab === 'stock' && <StockView data={data} setData={updateData} user={currentUser} />}

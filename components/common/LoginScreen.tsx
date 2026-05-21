@@ -5,7 +5,7 @@ import { useAuth } from './AuthProvider';
 type Mode = 'login' | 'register';
 
 export const LoginScreen: React.FC = () => {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signUpError, clearAuthError } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,6 +16,7 @@ export const LoginScreen: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    clearAuthError();
 
     if (mode === 'register' && password !== confirmPassword) {
       setError('Les mots de passe ne correspondent pas.');
@@ -57,9 +58,12 @@ export const LoginScreen: React.FC = () => {
   const switchMode = () => {
     setMode(mode === 'login' ? 'register' : 'login');
     setError('');
+    clearAuthError();
     setPassword('');
     setConfirmPassword('');
   };
+
+  const displayError = error || signUpError;
 
   return (
     <div className="min-h-screen bg-orange-50 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
@@ -76,10 +80,10 @@ export const LoginScreen: React.FC = () => {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
+          {displayError && (
             <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-xs font-bold">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              {error}
+              {displayError}
             </div>
           )}
           <input

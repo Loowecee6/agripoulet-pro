@@ -3,15 +3,14 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
-// Your Firebase project credentials (keep them secure in production)
 const firebaseConfig = {
-  apiKey: "AIzaSyD7XQFxRQUpfXdYFaW_Io3-VP_kGx5eqRk",
-  authDomain: "agripoulet-pro.firebaseapp.com",
-  projectId: "agripoulet-pro",
-  storageBucket: "agripoulet-pro.firebasestorage.app",
-  messagingSenderId: "874992395752",
-  appId: "1:874992395752:web:37d7d6cf351cbc517c705d",
-  measurementId: "G-BRRW95TX9D"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase app

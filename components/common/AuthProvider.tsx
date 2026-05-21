@@ -8,6 +8,8 @@ interface AuthContextProps {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOutUser: () => Promise<void>;
+  signUpError: string | null;
+  clearAuthError: () => void;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -26,6 +28,7 @@ interface ProviderProps {
 
 export const AuthProvider: React.FC<ProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [signUpError, setSignUpError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -39,15 +42,24 @@ export const AuthProvider: React.FC<ProviderProps> = ({ children }) => {
   };
 
   const signUp = async (email: string, password: string) => {
-    await createUserWithEmailAndPassword(auth, email, password);
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      setSignUpError(null);
+    } catch (error: any) {
+      console.error('Sign‑up error:', error);
+      setSignUpError(error.message ?? 'Unexpected error');
+      throw error;
+    }
   };
 
   const signOutUser = async () => {
     await signOut(auth);
   };
 
+  const clearAuthError = () => setSignUpError(null);
+
   return (
-    <AuthContext.Provider value={{ user, signIn, signUp, signOutUser }}>
+    <AuthContext.Provider value={{ user, signIn, signUp, signOutUser, signUpError, clearAuthError }}>
       {children}
     </AuthContext.Provider>
   );

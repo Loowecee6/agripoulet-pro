@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useToast } from '../common/ToastContext';
 import { QuickAddGrid } from '../common/QuickAddGrid';
-import { Plus, ChevronRight, ShoppingBag, MinusCircle, CheckCircle2, Receipt, Info } from 'lucide-react';
+import { Plus, ChevronRight, ShoppingBag, MinusCircle, CheckCircle2, Receipt, Info, Edit2, Trash2 } from 'lucide-react';
 import { AppData, Sale, Chicken } from '../../types';
 import { Modal } from '../common/Modal';
 import { SearchBar } from '../common/SearchBar';
@@ -15,6 +15,7 @@ export const VentesView = ({ data, setData }: VentesViewProps) => {
   const { addToast } = useToast();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [search, setSearch] = useState('');
   
   // États pour la création d'une vente
@@ -97,6 +98,24 @@ export const VentesView = ({ data, setData }: VentesViewProps) => {
 
   const filteredSales = data.sales.filter(s => s.clientNom.toLowerCase().includes(search.toLowerCase()));
 
+  const handleDeleteSale = (saleId: string) => {
+    if (!confirm('Supprimer cette vente ? Les poulets seront remis en stock.')) return;
+    const sale = data.sales.find(s => s.id === saleId);
+    if (!sale) return;
+    // Unmark chickens as sold
+    const updatedStock = data.stockBatches.map(b => ({
+      ...b,
+      poulets: b.poulets.map(p => sale.pouletIds.includes(p.id) ? { ...p, vendu: false } : p)
+    }));
+    setData({
+      ...data,
+      stockBatches: updatedStock,
+      sales: data.sales.filter(s => s.id !== saleId)
+    });
+    if (selectedSale?.id === saleId) setSelectedSale(null);
+    addToast('Vente supprimée', 'info');
+  };
+
   // Récupération des détails d'un poulet à partir des batches (optimisé)
   const getSaleChickens = (pouletIds: string[]) => {
     const details: Chicken[] = [];
@@ -121,10 +140,9 @@ export const VentesView = ({ data, setData }: VentesViewProps) => {
         {filteredSales.map(s => (
           <div 
             key={s.id} 
-            className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex justify-between items-center cursor-pointer active:bg-gray-50 transition-colors"
-            onClick={() => setSelectedSale(s)}
+            className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex justify-between items-center"
           >
-             <div>
+             <div className="cursor-pointer flex-1" onClick={() => setSelectedSale(s)}>
                <div className="font-bold text-gray-800">{s.clientNom}</div>
                <div className="text-[10px] text-gray-400">{new Date(s.dateVente).toLocaleDateString()} • {s.pouletIds.length} poulet(s)</div>
                {s.isCredit && (
@@ -133,11 +151,13 @@ export const VentesView = ({ data, setData }: VentesViewProps) => {
                  </div>
                )}
              </div>
-             <div className="flex items-center gap-3">
-               <div className="text-right">
+             <div className="flex items-center gap-1">
+               <div className="text-right mr-2">
                  <div className="font-black text-orange-600">{s.total} F</div>
                </div>
-               <ChevronRight className="w-4 h-4 text-gray-300" />
+               <button onClick={() => setEditingSale(s)} className="p-2 text-gray-300 hover:text-orange-500 transition-colors"><Edit2 className="w-4 h-4" /></button>
+               <button onClick={() => handleDeleteSale(s.id)} className="p-2 text-gray-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
+               <button onClick={() => setSelectedSale(s)} className="p-2 text-gray-300 hover:text-gray-500 transition-colors"><ChevronRight className="w-4 h-4" /></button>
              </div>
           </div>
         ))}
@@ -199,9 +219,8 @@ export const VentesView = ({ data, setData }: VentesViewProps) => {
               {basket.length === 0 && <p className="text-center text-xs text-gray-400 py-6 italic">Aucun poulet sélectionné</p>}
               {basket.map(p => (
                 <div key={p.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 text-xs shadow-sm">
-                  <ShoppingBag className="w-4 h-4 text-orange-400" />
+                  <span className={`px-2 py-1 rounded-lg text-[10px] font-black tracking-wider bg-orange-100 text-orange-700`}>{p.numero}</span>
                   <div className="flex-1">
-                    <div className="font-bold">{p.numero}</div>
                     <div className="text-[9px] text-gray-400">{p.poids} kg</div>
                   </div>
                   <div className="font-black text-orange-600 text-sm">{p.prix} F</div>
@@ -267,13 +286,13 @@ export const VentesView = ({ data, setData }: VentesViewProps) => {
                    <span className="text-right">Prix</span>
                  </div>
                  <div className="h-px bg-gray-100" />
-                 {getSaleChickens(selectedSale.pouletIds).map(p => (
-                   <div key={p.id} className="grid grid-cols-3 items-center px-1 text-sm">
-                     <span className="font-bold text-gray-700">{p.numero}</span>
-                     <span className="text-center text-gray-500">{p.poids} kg</span>
-                     <span className="text-right font-black text-orange-600">{p.prix} F</span>
-                   </div>
-                 ))}
+                  {getSaleChickens(selectedSale.pouletIds).map(p => (
+                    <div key={p.id} className="grid grid-cols-3 items-center px-1 text-sm">
+                      <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black tracking-wider bg-orange-100 text-orange-700 inline-block w-fit`}>{p.numero}</span>
+                      <span className="text-center text-gray-500">{p.poids} kg</span>
+                      <span className="text-right font-black text-orange-600">{p.prix} F</span>
+                    </div>
+                  ))}
                </div>
 
                <div className="h-px bg-gray-100 mb-4" />
@@ -315,14 +334,72 @@ export const VentesView = ({ data, setData }: VentesViewProps) => {
                 </button>
               )}
               
-              <button 
-                onClick={() => setSelectedSale(null)}
-                className="w-full bg-gray-100 text-gray-500 p-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-transform"
-              >
-                Fermer
-              </button>
+               <button 
+                 onClick={() => setSelectedSale(null)}
+                 className="w-full bg-gray-100 text-gray-500 p-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-transform"
+               >
+                 Fermer
+               </button>
+             </div>
+           </div>
+         )}
+      </Modal>
+
+      {/* Edit Sale Modal */}
+      <Modal isOpen={!!editingSale} onClose={() => setEditingSale(null)} title="Modifier la Vente">
+        {editingSale && (
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const f = new FormData(e.currentTarget);
+            const clientId = f.get('clientId') as string;
+            const client = data.clients.find(c => c.id === clientId);
+            if (!client) return addToast("Client invalide", 'error');
+            const isCredit = f.get('isCredit') === 'on';
+            const updated: Sale = {
+              ...editingSale,
+              clientId: client.id,
+              clientNom: client.nom,
+              total: Number(f.get('total')) || editingSale.total,
+              isCredit,
+              dueDate: isCredit ? (f.get('dueDate') as string) : undefined,
+              isPaid: !isCredit || f.get('isPaid') === 'on',
+            };
+            setData({
+              ...data,
+              sales: data.sales.map(s => s.id === editingSale.id ? updated : s)
+            });
+            setEditingSale(null);
+            addToast('Vente modifiée', 'success');
+          }} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Client *</label>
+              <select name="clientId" required defaultValue={editingSale.clientId} className="w-full p-4 border rounded-2xl bg-gray-50 outline-none text-sm appearance-none">
+                <option value="">Choisir un client</option>
+                {data.clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+              </select>
             </div>
-          </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Total (Frs)</label>
+              <input name="total" type="number" defaultValue={editingSale.total} className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" />
+            </div>
+            <div className="p-4 bg-white rounded-3xl space-y-3 border border-gray-100 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-gray-700">Vente à crédit ?</span>
+                <input name="isCredit" type="checkbox" defaultChecked={editingSale.isCredit} className="w-6 h-6 accent-orange-600" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] text-gray-400 font-black ml-1 uppercase">Date d'échéance</label>
+                <input name="dueDate" type="date" defaultValue={editingSale.dueDate || ''} className="w-full p-3 border rounded-xl text-sm outline-none bg-gray-50" />
+              </div>
+              {editingSale.isCredit && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-gray-700">Payé ?</span>
+                  <input name="isPaid" type="checkbox" defaultChecked={editingSale.isPaid} className="w-6 h-6 accent-green-600" />
+                </div>
+              )}
+            </div>
+            <button type="submit" className="w-full bg-gray-900 text-white p-4 rounded-2xl font-bold shadow-lg">Enregistrer</button>
+          </form>
         )}
       </Modal>
     </div>
