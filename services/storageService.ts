@@ -23,7 +23,32 @@ export const storageService = {
     try {
       const docRef = getUserDocRef(userId);
       console.log('[storageService] Saving data for user:', userId, 'Batches:', data.productionBatches.length);
-      await setDoc(docRef, data);
+
+      // Remove any undefined values recursively (Firestore rejects them)
+      const sanitize = (obj: any): any => {
+        if (Array.isArray(obj)) {
+          return obj.map(item => {
+            const cleaned = sanitize(item);
+            return cleaned === undefined ? null : cleaned;
+          });
+        }
+        if (obj && typeof obj === 'object') {
+          const cleaned: any = {};
+          for (const [k, v] of Object.entries(obj)) {
+            if (v !== undefined) {
+              const val = sanitize(v);
+              if (val !== undefined) {
+                cleaned[k] = val;
+              }
+            }
+          }
+          return cleaned;
+        }
+        return obj;
+      };
+
+      const cleanData = sanitize(data);
+      await setDoc(docRef, cleanData);
       console.log('[storageService] Data saved successfully');
     } catch (e) {
       console.error('[storageService] Error saving data to Firestore:', e);

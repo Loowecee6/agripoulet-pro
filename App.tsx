@@ -23,10 +23,27 @@ export default function App() {
   const prevBatchCount = useRef(0);
   const lastAutoBackup = useRef<string>('');
 
+  // Keep latest references for unmount/logout flush
+  const latestDataRef = useRef<AppData | null>(null);
+  const latestUserRef = useRef<typeof user>(null);
+  const isDirtyRef = useRef(false);
+
+  useEffect(() => {
+    latestDataRef.current = data;
+    if (data && !isInitialLoading) {
+      isDirtyRef.current = true;
+    }
+  }, [data, isInitialLoading]);
+
+  useEffect(() => {
+    latestUserRef.current = user;
+  }, [user]);
+
   useEffect(() => {
     if (!user) {
       setData(null);
       setIsInitialLoading(false);
+      isDirtyRef.current = false;
       return;
     }
     const init = async () => {
@@ -35,6 +52,7 @@ export default function App() {
       setData(cloudData);
       prevBatchCount.current = cloudData.productionBatches.length;
       setIsInitialLoading(false);
+      isDirtyRef.current = false;
     };
     init();
   }, [user]);
@@ -56,6 +74,7 @@ export default function App() {
     }
   }, [data, user, isInitialLoading]);
 
+  // Debounced save to Firestore
   useEffect(() => {
     if (!data || !user || isInitialLoading) return;
 
@@ -68,13 +87,14 @@ export default function App() {
       setSyncError(false);
       try {
         await storageService.saveData(user.uid, data);
+        isDirtyRef.current = false;
       } catch (e) {
         console.error('Failed to sync data:', e);
         setSyncError(true);
       } finally {
         setIsSyncing(false);
       }
-    }, 1000);
+    }, 1500); // 1.5s debounce to give the user time to type
 
     return () => {
       if (pendingSaveRef.current) {
@@ -82,6 +102,19 @@ export default function App() {
       }
     };
   }, [data, user, isInitialLoading]);
+
+  // Flush any unsaved changes on unmount or logout
+  useEffect(() => {
+    return () => {
+      const u = latestUserRef.current;
+      const d = latestDataRef.current;
+      if (u && d && isDirtyRef.current) {
+        storageService.saveData(u.uid, d).catch(err => 
+          console.error('Failed to sync data on unmount/logout:', err)
+        );
+      }
+    };
+  }, []);
 
   const notifications = useMemo(() => {
     if (!data) return [];
