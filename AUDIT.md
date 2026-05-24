@@ -83,7 +83,7 @@
 - [ ] Migrer vers des sous-collections : `batches`, `clients`, `sales`, `stockBatches`, etc.
 - [ ] Garder un cache local IndexedDB pour les performances offline
 
-⚠️ **Non fait** — Nécessite une restructuration majeure (1-2 jours). À planifier séparément.
+⏳ **Reporté** — Nécessite une restructuration majeure (1-2 jours). À planifier ultérieurement.
 
 ---
 
@@ -235,7 +235,10 @@
 **Fichiers modifiés :** `services/notificationService.ts`, `hooks/useFCMNotifications.ts`
 
 ### P3-M5: Couverture de tests
-À faire — Tests sur storageService, notificationChecks, et handlers des vues.
+- [ ] Tests unitaires pour `storageService.ts`, `notificationChecks.ts`, `domain/sales.ts`, `hooks/useSalesActions.ts`
+- [ ] Tests d'intégration pour `offlineService.ts` (searchIndex)
+
+⏳ **Reporté** — À faire ultérieurement.
 
 ### P3-M6: Dark mode incomplet sur EcheancesView
 - [x] Ajouter les classes `dark:` manquantes (fond, texte, bordures)
@@ -267,18 +270,17 @@
 
 | Priorité | Total | Fait | Partiel | Restant |
 | :------: | :---: | :--: | :-----: | :-----: |
-| P0 | 5 | 4 | 0 | 1 (C4) |
+| P0 | 5 | 4 | 0 | 1 (C4 — reporté) |
 | P1 | 2 | 2 | 0 | 0 |
 | P2 | 4 | 4 | 0 | 0 |
-| P3 | 8 | 8 | 0 | 0 |
-| **Total** | **19** | **18** | **0** | **1** |
+| P3 | 8 | 7 | 0 | 1 (M5 — reporté) |
+| **Total** | **19** | **17** | **0** | **2 (reportés)** |
 
 ---
 
 ## Synthèse des correctifs restants
 
-| Item | Priorité | Effort | Dépendances | Recommandation |
-|:-----|:--------:|:------:|:------------|:---------------|
-| **P3-M3** (finir currency.ts) | 🟡 Faible | 30 min | Aucune | Remplacer les ~10 patterns restants (tooltips, template literals) |
-| **P3-M5** (tests) | 🟡 Faible | 1h | Aucune | Tests unitaires pour notificationChecks, offlineService, domain/sales.ts |
-| **P0-C4** (Singleton) | 🔴 Critique | 1-2 jours | Architecture | Migrer vers sous-collections Firestore |
+| Item | Priorité | Effort | Statut |
+|:-----|:--------:|:------:|:------|
+| **P0-C4** (Singleton Firestore) | 🔴 Critique | 1-2 jours | ⏳ Reporté — À planifier |
+| **P3-M5** (Couverture de tests) | 🟡 Faible | 1h | ⏳ Reporté — À faire plus tard |
