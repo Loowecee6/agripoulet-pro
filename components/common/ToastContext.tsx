@@ -1,15 +1,9 @@
 // src/components/common/ToastContext.tsx
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { ToastContainer } from './ToastContainer';
+import { ToastMessage } from '../../types';
 
-type ToastType = 'success' | 'error' | 'info' | 'warning';
-
-export interface ToastMessage {
-  id: string;
-  type: ToastType;
-  text: string;
-  duration?: number; // ms, default 3000
-}
+type ToastType = ToastMessage['type'];
 
 interface ToastContextProps {
   addToast: (text: string, type?: ToastType, duration?: number) => void;

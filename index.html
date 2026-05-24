@@ -5,6 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AgriPoulet Pro</title>
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#ea580c">
+    <meta name="background-color" content="#fff7ed">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AgriPoulet">
+    <link rel="apple-touch-icon" href="/pwa-192x192.svg">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="mask-icon" href="/favicon.svg" color="#ea580c">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -15,6 +26,26 @@
         }
         .safe-bottom {
             padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        /* Prevent flash of unstyled content on offline load */
+        .app-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: #fff7ed;
+        }
+        .app-loading::after {
+            content: 'Chargement...';
+            color: #c2410c;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
     </style>
 <script type="importmap">
@@ -28,10 +59,11 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
 <body class="bg-gray-50 text-gray-900 overflow-x-hidden">
-    <div id="root"></div>
+    <div id="root">
+        <div class="app-loading"></div>
+    </div>
 <script type="module" src="/index.tsx"></script>
 </body>
 </html>

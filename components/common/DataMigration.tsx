@@ -91,6 +91,7 @@ export function DataMigration() {
         stockBatches: [...(existingData.stockBatches || []), ...(foundData.stockBatches || [])],
         clients: [...(existingData.clients || []), ...(foundData.clients || [])],
         sales: [...(existingData.sales || []), ...(foundData.sales || [])],
+        reservations: [...(existingData.reservations || []), ...(foundData.reservations || [])],
         settings: foundData.settings || existingData.settings,
       };
 

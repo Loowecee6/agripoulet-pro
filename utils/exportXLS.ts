@@ -36,6 +36,21 @@ export function exportBatchExpenses(batchName: string, expenses: { libelle: stri
   exportToXLS(`Depenses_${batchName}`, headers, rows);
 }
 
+export function exportClients(clients: { id: string; nom: string; tel: string; adresse: string }[], sales: { clientId: string; total: number; isCredit: boolean; isPaid: boolean; dueDate?: string }[]) {
+  const headers = ['Nom', 'Téléphone', 'Adresse', 'Total achats', 'Crédit en cours', 'Solde restant', 'Statut crédit'];
+  const rows = clients.map(c => {
+    const clientSales = sales.filter(s => s.clientId === c.id);
+    const totalAchats = clientSales.reduce((s, v) => s + v.total, 0);
+    const creditSales = clientSales.filter(s => s.isCredit);
+    const creditTotal = creditSales.reduce((s, v) => s + v.total, 0);
+    const remaining = creditSales.reduce((s, v) => s + (v.total - (v.isPaid ? v.total : 0)), 0);
+    const status = creditSales.length === 0 ? 'Comptant' : remaining <= 0 ? 'Soldé' : 'Impayé';
+    return [c.nom, c.tel || '', c.adresse || '', totalAchats, creditTotal, remaining, status];
+  });
+
+  exportToXLS('Clients', headers, rows);
+}
+
 export function exportBatchSummary(batchName: string, summary: {
   totalInvested: number;
   totalRevenue: number;

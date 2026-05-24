@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { AlertTriangle, TrendingUp, Calendar, BarChart3, Target, Droplets, AlertCircle, CheckCircle } from 'lucide-react';
-import { ProductionBatch } from '../types';
+import { ProductionBatch } from '../../types';
 import { POIDS_THEORIQUE_REFERENCE } from '../../constants';
 
 interface BatchAnalyticsProps {

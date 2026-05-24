@@ -10,9 +10,11 @@ interface RapportViewProps {
   data: AppData;
   setData: (d: AppData) => void;
   user: User;
+  permissions: string[];
 }
 
-export const RapportView = ({ data, setData, user }: RapportViewProps) => {
+export const RapportView = ({ data, setData, user, permissions }: RapportViewProps) => {
+  const can = (perm: string) => permissions.includes(perm);
   const [previewBatch, setPreviewBatch] = useState<any>(null);
   const [isChangingPass, setIsChangingPass] = useState(false);
 
@@ -71,7 +73,7 @@ export const RapportView = ({ data, setData, user }: RapportViewProps) => {
 
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold">Bilans Financiers</h2>
-        {user.role === 'admin' && (
+        {can('settings.edit') && (
           <button 
             onClick={() => setIsChangingPass(true)} 
             className="p-2 bg-gray-100 text-gray-600 rounded-xl hover:bg-orange-100 hover:text-orange-600 transition-colors"
@@ -120,7 +122,7 @@ export const RapportView = ({ data, setData, user }: RapportViewProps) => {
 
             <div className="flex gap-2">
               <button onClick={() => setPreviewBatch(sum)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-2xl font-bold text-[10px] uppercase">Détails</button>
-              {sum.isFinished && !sum.sb.isFinalized && user.role === 'admin' && (
+              {sum.isFinished && !sum.sb.isFinalized && can('stock.finalize') && (
                 <button onClick={() => handleFinalize(sum.sb.id)} className="flex-1 py-3 bg-gray-900 text-white rounded-2xl font-bold text-[10px] uppercase">Clôturer</button>
               )}
             </div>

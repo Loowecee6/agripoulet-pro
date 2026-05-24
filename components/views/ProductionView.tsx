@@ -14,9 +14,11 @@ interface ProductionViewProps {
   data: AppData;
   setData: (d: AppData) => void;
   user: User;
+  permissions: string[];
 }
 
-export const ProductionView = ({ data, setData, user }: ProductionViewProps) => {
+export const ProductionView = ({ data, setData, user, permissions }: ProductionViewProps) => {
+  const can = (perm: string) => permissions.includes(perm);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedBatch, setSelectedBatch] = useState<ProductionBatch | null>(null);
   const [batchTab, setBatchTab] = useState<'suivi' | 'depenses' | 'vaccin'>('suivi');
@@ -27,7 +29,7 @@ export const ProductionView = ({ data, setData, user }: ProductionViewProps) => 
 
   const handleAddBatch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (user.role !== 'admin') return alert("Seul un administrateur peut créer une nouvelle bande.");
+    if (!can('production.create')) return alert("Vous n'avez pas la permission de créer une bande.");
     const formData = new FormData(e.currentTarget);
     const newBatch: ProductionBatch = {
       id: crypto.randomUUID(),
@@ -102,7 +104,7 @@ export const ProductionView = ({ data, setData, user }: ProductionViewProps) => 
               <BarChart3 className="w-5 h-5" />
             </button>
           )}
-          {user.role === 'admin' && (
+          {can('production.create') && (
             <button onClick={() => setIsAddModalOpen(true)} className="bg-orange-600 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-transform"><Plus /></button>
           )}
         </div>
@@ -120,7 +122,7 @@ export const ProductionView = ({ data, setData, user }: ProductionViewProps) => 
               <h3 className="font-bold text-gray-800 cursor-pointer flex-1" onClick={() => setSelectedBatch(batch)}>{batch.nom}</h3>
               <div className="flex items-center gap-1">
                 <span className="bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-1 rounded-full mr-1">J{getDayOfBatch(batch.dateMisePlace, new Date().toISOString())}</span>
-                {user.role === 'admin' && (
+                {can('production.edit') && (
                   <button onClick={(e) => { e.stopPropagation(); setEditingBatch(batch); }} className="p-1 text-gray-300 hover:text-orange-500 transition-colors"><Edit2 className="w-4 h-4" /></button>
                 )}
               </div>
@@ -139,8 +141,8 @@ export const ProductionView = ({ data, setData, user }: ProductionViewProps) => 
           <input name="nom" required className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" placeholder="Nom de la bande" />
           <input name="date" type="date" required className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" defaultValue={new Date().toISOString().split('T')[0]} />
           <div className="grid grid-cols-2 gap-4">
-            <input name="count" type="number" required className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" placeholder="Nb Poussins" />
-            <input name="prixPoussin" type="number" required className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" placeholder="Prix/Poussin" />
+            <input name="count" type="number" min="0" required className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" placeholder="Nb Poussins" />
+            <input name="prixPoussin" type="number" min="0" required className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" placeholder="Prix/Poussin" />
           </div>
           <button type="submit" className="w-full bg-orange-600 text-white p-4 rounded-2xl font-bold shadow-lg shadow-orange-100">Créer la production</button>
         </form>
@@ -198,17 +200,17 @@ export const ProductionView = ({ data, setData, user }: ProductionViewProps) => 
                   e.currentTarget.reset();
                 }}>
                   <input name="date" type="date" required className="col-span-2 p-3 border rounded-xl text-sm mb-2" defaultValue={new Date().toISOString().split('T')[0]} />
-                  <input name="mort" type="number" placeholder="Morts" className="p-3 border rounded-xl text-sm" />
-                  <input name="conso" type="number" placeholder="Conso (g)" className="p-3 border rounded-xl text-sm" />
-                  <input name="qte" type="number" step="0.01" placeholder="Qte Alim (kg)" className="p-3 border rounded-xl text-sm" />
+                  <input name="mort" type="number" min="0" placeholder="Morts" className="p-3 border rounded-xl text-sm" />
+                  <input name="conso" type="number" min="0" placeholder="Conso (g)" className="p-3 border rounded-xl text-sm" />
+                  <input name="qte" type="number" min="0" step="0.01" placeholder="Qte Alim (kg)" className="p-3 border rounded-xl text-sm" />
                   <div className="col-span-2 bg-white border border-orange-200 rounded-xl p-3 space-y-2">
                     <p className="text-[10px] font-black text-orange-500 uppercase">Pesée par échantillon</p>
                     <div className="grid grid-cols-2 gap-2">
-                      <input name="sampleCount" type="number" placeholder="Nb pesés" className="p-2 border rounded-lg text-sm" />
-                      <input name="sampleTotalWeight" type="number" placeholder="Poids total (g)" className="p-2 border rounded-lg text-sm" />
+                      <input name="sampleCount" type="number" min="0" placeholder="Nb pesés" className="p-2 border rounded-lg text-sm" />
+                      <input name="sampleTotalWeight" type="number" min="0" placeholder="Poids total (g)" className="p-2 border rounded-lg text-sm" />
                     </div>
                     <p className="text-[10px] text-gray-400">Ou saisir le poids moyen direct :</p>
-                    <input name="poidsDirect" type="number" placeholder="Poids moyen (g)" className="w-full p-2 border rounded-lg text-sm" />
+                    <input name="poidsDirect" type="number" min="0" placeholder="Poids moyen (g)" className="w-full p-2 border rounded-lg text-sm" />
                   </div>
                   <textarea name="note" placeholder="Observations Process..." className="col-span-2 p-3 border rounded-xl text-sm min-h-[60px]" />
                   <button type="submit" className="col-span-2 bg-orange-600 text-white p-3 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform">Saisir le suivi</button>
@@ -280,7 +282,7 @@ export const ProductionView = ({ data, setData, user }: ProductionViewProps) => 
                 }}>
                   <input name="libelle" required placeholder="Libellé dépense" className="w-full p-3 border rounded-xl text-sm bg-white" />
                   <div className="grid grid-cols-2 gap-2">
-                    <input name="montant" type="number" required placeholder="Prix Frs" className="p-3 border rounded-xl text-sm bg-white" />
+                    <input name="montant" type="number" min="0" required placeholder="Prix Frs" className="p-3 border rounded-xl text-sm bg-white" />
                     <input name="date" type="date" className="p-3 border rounded-xl text-sm bg-white" defaultValue={new Date().toISOString().split('T')[0]} />
                   </div>
                   <button type="submit" className="w-full bg-blue-600 text-white p-3 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform">Enregistrer dépense</button>
@@ -319,7 +321,7 @@ export const ProductionView = ({ data, setData, user }: ProductionViewProps) => 
               </div>
             )}
             
-            {user.role === 'admin' && (
+            {can('production.abattage') && (
               <>
                 <button 
                   onClick={() => {
@@ -377,8 +379,8 @@ export const ProductionView = ({ data, setData, user }: ProductionViewProps) => 
             <input name="nom" required defaultValue={editingBatch.nom} className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" placeholder="Nom de la bande" />
             <input name="date" type="date" required defaultValue={editingBatch.dateMisePlace} className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" />
             <div className="grid grid-cols-2 gap-4">
-              <input name="count" type="number" required defaultValue={editingBatch.nbPoussinsInitial} className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" placeholder="Nb Poussins" />
-              <input name="prixPoussin" type="number" required defaultValue={editingBatch.prixAchatPoussin} className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" placeholder="Prix/Poussin" />
+              <input name="count" type="number" min="0" required defaultValue={editingBatch.nbPoussinsInitial} className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" placeholder="Nb Poussins" />
+              <input name="prixPoussin" type="number" min="0" required defaultValue={editingBatch.prixAchatPoussin} className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" placeholder="Prix/Poussin" />
             </div>
             <button type="submit" className="w-full bg-gray-900 text-white p-4 rounded-2xl font-bold shadow-lg">Enregistrer</button>
           </form>
@@ -453,7 +455,7 @@ export const ProductionView = ({ data, setData, user }: ProductionViewProps) => 
           }} className="space-y-3">
             <input name="libelle" required defaultValue={editingExpense.expense.libelle} placeholder="Libellé dépense" className="w-full p-3 border rounded-xl text-sm bg-white" />
             <div className="grid grid-cols-2 gap-2">
-              <input name="montant" type="number" required defaultValue={editingExpense.expense.montant} placeholder="Prix Frs" className="p-3 border rounded-xl text-sm bg-white" />
+              <input name="montant" type="number" min="0" required defaultValue={editingExpense.expense.montant} placeholder="Prix Frs" className="p-3 border rounded-xl text-sm bg-white" />
               <input name="date" type="date" defaultValue={editingExpense.expense.date} className="p-3 border rounded-xl text-sm bg-white" />
             </div>
             <button type="submit" className="w-full bg-gray-900 text-white p-3 rounded-xl font-bold text-sm">Enregistrer</button>

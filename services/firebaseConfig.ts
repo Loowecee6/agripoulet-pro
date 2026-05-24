@@ -13,6 +13,13 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
+/**
+ * Clé VAPID pour FCM Web Push.
+ * Obtenez-la dans Firebase Console → Project Settings → Cloud Messaging → Web Push certificates
+ * Ajoutez VITE_FIREBASE_VAPID_KEY=votre_cle dans le fichier .env.local
+ */
+export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined;
+
 // Initialize Firebase app
 const firebaseApp = initializeApp(firebaseConfig);
 
