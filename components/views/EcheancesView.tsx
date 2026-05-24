@@ -3,6 +3,8 @@ import { CreditCard, AlertTriangle, Clock, CheckCircle2, Phone, MessageCircle, F
 import { AppData, Sale } from '../../types';
 import { formatWhatsAppUrl } from '../../utils/whatsapp';
 import { getRemainingBalance, isSalePaid } from '../../utils/creditHelpers';
+import { formatCurrency, formatNumber } from '../../utils/currency';
+import { formatDateShort } from '../../utils/dateFormat';
 
 interface EcheancesViewProps {
   data: AppData;
@@ -16,7 +18,8 @@ export const EcheancesView = ({ data }: EcheancesViewProps) => {
 
   const creditSales = useMemo(() => {
     const now = new Date();
-    return data.sales
+    const activeSales = data.sales.filter(s => !('deletedAt' in s));
+    return activeSales
       .filter(s => s.isCredit)
       .map(s => {
         const remaining = getRemainingBalance(s);
@@ -105,9 +108,9 @@ export const EcheancesView = ({ data }: EcheancesViewProps) => {
           .reduce((sum, s) => sum + s.remaining, 0);
         if (totalImpaye <= 0) return null;
         return (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center">
-            <div className="text-[10px] font-black text-red-500 uppercase tracking-wider">Total impayé</div>
-            <div className="text-2xl font-black text-red-600 mt-1">{totalImpaye.toLocaleString()} Frs</div>
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 text-center">
+            <div className="text-[10px] font-black text-red-500 dark:text-red-400 uppercase tracking-wider">Total impayé</div>
+            <div className="text-2xl font-black text-red-600 mt-1">{formatCurrency(totalImpaye)}</div>
           </div>
         );
       })()}
@@ -120,8 +123,8 @@ export const EcheancesView = ({ data }: EcheancesViewProps) => {
             onClick={() => setFilter(tab.key)}
             className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all ${
               filter === tab.key
-                ? 'bg-gray-900 text-white'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                ? 'bg-gray-900 dark:bg-gray-700 text-white'
+                : 'bg-gray-100 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
             }`}
           >
             {tab.label} ({tab.count})
@@ -133,8 +136,8 @@ export const EcheancesView = ({ data }: EcheancesViewProps) => {
       <div className="space-y-2">
         {creditSales.length === 0 && (
           <div className="text-center py-10">
-            <CreditCard className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-400">Aucune échéance trouvée</p>
+            <CreditCard className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <p className="text-sm text-gray-400 dark:text-gray-500">Aucune échéance trouvée</p>
           </div>
         )}
 
@@ -192,17 +195,17 @@ export const EcheancesView = ({ data }: EcheancesViewProps) => {
                     }
                   </span>
                   {s.dueDate && (
-                    <span className="text-[10px] text-gray-400">
-                      {new Date(s.dueDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                      {formatDateShort(s.dueDate)}
                     </span>
                   )}
                 </div>
               </div>
               <div className="text-right">
                 <div className={`text-sm font-black ${s.paid ? 'text-green-600' : 'text-red-600'}`}>
-                  {s.remaining.toLocaleString()} F
+                  {formatCurrency(s.remaining)}
                 </div>
-                <div className="text-[9px] text-gray-400">sur {s.total.toLocaleString()} F</div>
+                <div className="text-[9px] text-gray-400">sur {formatCurrency(s.total)}</div>
               </div>
             </div>
 
@@ -211,22 +214,20 @@ export const EcheancesView = ({ data }: EcheancesViewProps) => {
               <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 space-y-3 animate-in slide-in-from-top duration-200">
                 {/* Payment info */}
                 {s.payments && s.payments.length > 0 && (
-                  <div className="space-y-1">
-                    <div className="text-[9px] font-black text-gray-400 uppercase">Versements</div>
+                  <div className="space-y-1">                        <div className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase">Versements</div>
                     {s.payments.map(p => (
-                      <div key={p.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 rounded-xl p-2.5 text-xs">
+                      <div key={p.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 rounded-xl p-2.5 text-xs">
                         <div className="flex items-center gap-2">
                           <DollarSign className="w-3 h-3 text-green-500" />
                           <span className="text-gray-600 dark:text-gray-300">
-                            {new Date(p.date).toLocaleDateString('fr-FR')}
+                            {formatDateShort(p.date)}
                           </span>
                           {p.methode && (
-                            <span className="text-[9px] text-gray-400">
+                            <span className="text-[9px] text-gray-400 dark:text-gray-500">
                               ({p.methode === 'especes' ? 'Espèces' : p.methode === 'orange_money' ? 'Orange Money' : 'Wave'})
                             </span>
                           )}
-                        </div>
-                        <span className="font-bold text-gray-800 dark:text-white">{p.montant.toLocaleString()} F</span>
+                        </div>                          <span className="font-bold text-gray-800 dark:text-white">{formatCurrency(p.montant)}</span>
                       </div>
                     ))}
                   </div>
@@ -234,7 +235,7 @@ export const EcheancesView = ({ data }: EcheancesViewProps) => {
 
                 {/* WhatsApp relance button */}
                 {!s.paid && s.client?.tel && (() => {
-                  const waMsg = `Bonjour ${s.clientNom} 👋\n\nJe me permets de vous relancer concernant le solde restant de ${s.remaining.toLocaleString()} Frs sur vos achats (${new Date(s.dateVente).toLocaleDateString('fr-FR')}).\n\nMerci de bien vouloir régulariser votre situation. 🙏\n\nCordialement.`;
+                  const waMsg = `Bonjour ${s.clientNom} 👋\n\nJe me permets de vous relancer concernant le solde restant de ${formatCurrency(s.remaining)} sur vos achats (${formatDateShort(s.dateVente)}).\n\nMerci de bien vouloir régulariser votre situation. 🙏\n\nCordialement.`;
                   const waUrl = formatWhatsAppUrl(s.client.tel, waMsg);
                   if (!waUrl) return null;
                   return (

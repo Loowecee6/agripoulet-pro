@@ -6,6 +6,8 @@ import { generateInvoice } from '../../utils/invoicePDF';
 import { exportClients } from '../../utils/exportXLS';
 import { formatWhatsAppUrl } from '../../utils/whatsapp';
 import { getRemainingBalance, isSalePaid, getTotalPayments, getCreditRisk } from '../../utils/creditHelpers';
+import { formatCurrency, formatNumber } from '../../utils/currency';
+import { formatDateShort, formatDateFull, formatDateInvoiceShort } from '../../utils/dateFormat';
 import { Modal } from '../common/Modal';
 import { SearchBar } from '../common/SearchBar';type FilterStatus = 'all' | 'actif' | 'inactif_30' | 'inactif_60';
 type RiskFilter = 'all' | 'urgent' | 'en_cours' | 'aucun';
@@ -57,6 +59,8 @@ export const ClientsView = ({ data, setData }: ClientsViewProps) => {
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('nom');
 
+  const activeSales = useMemo(() => data.sales.filter(s => !('deletedAt' in s)), [data.sales]);
+
   // ── Computed per-client stats ──
   const clientStats = useMemo(() => {
     const map = new Map<string, {
@@ -70,7 +74,7 @@ export const ClientsView = ({ data, setData }: ClientsViewProps) => {
       risk: ReturnType<typeof getWorstRisk>;
     }>();
     data.clients.forEach(c => {
-      const sales = getClientSales(data.sales, c.id);
+      const sales = getClientSales(activeSales, c.id);
       const lastPurchase = sales.length > 0 ? new Date(sales[0].dateVente) : null;
       const creditSales = sales.filter(s => s.isCredit && !isSalePaid(s));
       const creditRemaining = creditSales.reduce((sum, s) => sum + getRemainingBalance(s), 0);
@@ -321,8 +325,7 @@ export const ClientsView = ({ data, setData }: ClientsViewProps) => {
                     {c.tel && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{c.tel}</span>}
                     {stat && stat.purchaseCount > 0 && (
                       <>
-                        <span className="flex items-center gap-1"><ShoppingCart className="w-3 h-3" />{stat.purchaseCount} achat(s)</span>
-                        <span className="font-bold text-orange-600">{stat.totalSpent.toLocaleString()} F</span>
+                        <span className="flex items-center gap-1"><ShoppingCart className="w-3 h-3" />{stat.purchaseCount} achat(s)</span>                            <span className="font-bold text-orange-600">{formatNumber(stat.totalSpent)} F</span>
                       </>
                     )}
                     {stat && stat.purchaseCount === 0 && (
@@ -331,7 +334,7 @@ export const ClientsView = ({ data, setData }: ClientsViewProps) => {
                   </div>
                   {stat && stat.lastPurchase && (
                     <div className="text-[9px] text-gray-400 mt-1">
-                      Dernier achat : {stat.lastPurchase.toLocaleDateString('fr-FR')}
+                      Dernier achat : {formatDateShort(stat.lastPurchase)}
                       {stat.daysSince !== null && stat.daysSince > 0 && (
                         <span className="ml-1">(il y a {stat.daysSince}j)</span>
                       )}
@@ -446,13 +449,13 @@ export const ClientsView = ({ data, setData }: ClientsViewProps) => {
                   </div>
                   <div className="bg-white dark:bg-gray-900 rounded-xl p-2.5 text-center border border-gray-100 dark:border-gray-700">
                     <DollarSign className="w-4 h-4 text-green-500 mx-auto mb-1" />
-                    <div className="text-sm font-black text-gray-800 dark:text-white">{(stat?.totalSpent || 0).toLocaleString()}</div>
+                    <div className="text-sm font-black text-gray-800 dark:text-white">{formatNumber(stat?.totalSpent || 0)}</div>
                     <div className="text-[7px] text-gray-400 uppercase font-black tracking-wider">Dépensé</div>
                   </div>
                   <div className="bg-white dark:bg-gray-900 rounded-xl p-2.5 text-center border border-gray-100 dark:border-gray-700">
                     <CalendarDays className="w-4 h-4 text-blue-500 mx-auto mb-1" />
                     <div className="text-sm font-black text-gray-800 dark:text-white">
-                      {stat?.lastPurchase ? stat.lastPurchase.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'}
+                      {stat?.lastPurchase ? formatDateShort(stat.lastPurchase) : '—'}
                     </div>
                     <div className="text-[7px] text-gray-400 uppercase font-black tracking-wider">Dernier</div>
                   </div>
@@ -516,7 +519,7 @@ export const ClientsView = ({ data, setData }: ClientsViewProps) => {
                         <CreditCard className="w-4 h-4 text-red-600" />
                         <span className="text-[10px] font-black text-red-700 uppercase tracking-wider">Crédits en cours</span>
                       </div>
-                      <span className="text-lg font-black text-red-600">{stat.creditRemaining.toLocaleString()} F</span>
+                      <span className="text-lg font-black text-red-600">{formatCurrency(stat.creditRemaining)}</span>
                     </div>
                     <div className="space-y-1.5">
                       {activeCredits.map(s => {
@@ -530,11 +533,11 @@ export const ClientsView = ({ data, setData }: ClientsViewProps) => {
                                 risk.level === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
                               }`} />
                               <span className="font-medium text-gray-700">
-                                {new Date(s.dateVente).toLocaleDateString('fr-FR')}
+                                {formatDateShort(s.dateVente)}
                               </span>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className="text-gray-500">{remaining.toLocaleString()} F</span>
+                              <span className="text-gray-500">{formatCurrency(remaining)}</span>
                               {s.dueDate && (
                                 <span className={`text-[9px] font-bold ${
                                   risk.level === 'danger' ? 'text-red-600' :
@@ -581,7 +584,7 @@ export const ClientsView = ({ data, setData }: ClientsViewProps) => {
                               <span className={`w-2 h-2 rounded-full ${r.statut === 'confirmed' ? 'bg-blue-500' : 'bg-yellow-500'}`} />
                               <div>
                                 <div className="font-medium text-gray-700">
-                                  {new Date(r.dateReserve).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                                  {formatDateFull(r.dateReserve)}
                                   {isToday && <span className="ml-1 text-orange-600 font-bold">(Aujourd'hui)</span>}
                                 </div>
                                 <div className="text-[9px] text-gray-400">
@@ -591,7 +594,7 @@ export const ClientsView = ({ data, setData }: ClientsViewProps) => {
                             </div>
                             <div className="flex items-center gap-2">
                               {r.acompte && (
-                                <span className="text-[9px] font-bold text-green-600">{r.acompte.toLocaleString()} F</span>
+                                <span className="text-[9px] font-bold text-green-600">{formatCurrency(r.acompte)}</span>
                               )}
                               {isPast && r.statut === 'pending' && (
                                 <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 uppercase">En retard</span>
@@ -639,21 +642,19 @@ export const ClientsView = ({ data, setData }: ClientsViewProps) => {
                           </div>
                           <div>
                             <div className="text-xs font-bold text-gray-800">
-                              {new Date(s.dateVente).toLocaleDateString('fr-FR', {
-                                day: 'numeric', month: 'short', year: 'numeric'
-                              })}
+                              {formatDateInvoiceShort(s.dateVente)}
                             </div>
                             <div className="text-[9px] text-gray-400">{s.pouletIds.length} poulet(s)</div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-sm font-black text-orange-600">{s.total.toLocaleString()} F</div>
+                          <div className="text-sm font-black text-orange-600">{formatCurrency(s.total)}</div>
                           <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase ${
-                            !s.isCredit ? 'bg-green-100 text-green-600' :
+                            !s.isCredit                                ? 'bg-green-100 text-green-600' :
                             isSalePaid(s) ? 'bg-blue-100 text-blue-600' :
                             'bg-red-100 text-red-600'
                           }`}>
-                            {!s.isCredit ? 'Comptant' : isSalePaid(s) ? 'Payé' : `Solde ${getRemainingBalance(s).toLocaleString()}F`}
+                            {!s.isCredit ? 'Comptant' : isSalePaid(s) ? 'Payé' : `Solde ${formatNumber(getRemainingBalance(s))}F`}
                           </span>
                         </div>
                       </div>
@@ -669,13 +670,13 @@ export const ClientsView = ({ data, setData }: ClientsViewProps) => {
                               />
                             </div>
                             <span className="text-[9px] text-gray-500 font-medium whitespace-nowrap">
-                              {getTotalPayments(s).toLocaleString()} / {s.total.toLocaleString()} F
+                              {formatCurrency(getTotalPayments(s))} / {formatCurrency(s.total)}
                             </span>
                           </div>
                           {s.payments.slice(-1).map(p => (
                             <div key={p.id} className="text-[8px] text-gray-400 flex items-center gap-1">
                               <DollarSign className="w-2.5 h-2.5 text-green-500" />
-                              Dernier versement : {p.montant.toLocaleString()} F
+                              Dernier versement : {formatCurrency(p.montant)}
                               {p.methode && ` (${p.methode === 'especes' ? 'Espèces' : p.methode === 'orange_money' ? 'Orange Money' : 'Wave'})`}
                             </div>
                           ))}

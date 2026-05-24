@@ -12,6 +12,7 @@
  *   - Firebase Blaze plan (pay-as-you-go) requis pour les Cloud Functions
  *   - Clé VAPID configurée dans Firebase Console → Cloud Messaging
  *   - Variable d'env VITE_FIREBASE_VAPID_KEY dans .env.local
+ *   - App Check activé dans Firebase Console (recommandé)
  */
 
 const functions = require('firebase-functions');
@@ -20,46 +21,54 @@ const admin = require('firebase-admin');
 admin.initializeApp();
 
 /**
- * Fonction HTTP callable pour envoyer une notification push à un token FCM
+ * Fonction callable (sécurisée) pour envoyer une notification push à un token FCM.
  * 
- * L'application appelle cette fonction quand elle détecte des conditions
- * de notification (vaccination, mortalité, crédit).
+ * ✅ Sécurisé : utilise `onCall` au lieu de `onRequest` pour hériter
+ *    du contexte d'authentification Firebase Auth.
+ * ✅ Vérifie que l'appelant est authentifié (context.auth != null).
+ * ✅ L'appelant ne peut envoyer des notifications qu'avec son propre token FCM.
  * 
- * Corps de la requête (POST JSON):
- * {
- *   token: string,         // FCM token du destinataire
- *   notification: {         // Contenu de la notification
- *     title: string,
- *     body: string
- *   },
- *   data?: {                // Données additionnelles (optionnelles)
- *     type?: string,
- *     url?: string,
- *     ...
- *   }
- * }
+ * L'application appelle cette fonction via `firebase.functions().httpsCallable()`
+ * quand elle détecte des conditions de notification (vaccination, mortalité, crédit).
+ * 
+ * @param {Object} data
+ * @param {string} data.token - FCM token du destinataire
+ * @param {Object} data.notification - Contenu de la notification
+ * @param {string} data.notification.title
+ * @param {string} data.notification.body
+ * @param {Object} [data.data] - Données additionnelles optionnelles
+ * @param {Object} context - Contexte d'appel (rempli par Firebase)
  */
-exports.sendPushNotification = functions.https.onRequest(async (req, res) => {
-  // ⚠️ Sécurité basique : vérifier la méthode HTTP
-  if (req.method !== 'POST') {
-    res.status(405).send({ error: 'Méthode non autorisée. Utilisez POST.' });
-    return;
+exports.sendPushNotification = functions.https.onCall(async (data, context) => {
+  // ⚠️ Vérification d'authentification : seul un utilisateur connecté peut envoyer
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      'unauthenticated',
+      'Vous devez être connecté pour envoyer des notifications push.'
+    );
   }
 
+  const uid = context.auth.uid;
+  const { token, notification, data: extraData } = data;
+
+  // Validation des champs obligatoires
+  if (!token) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'Token FCM requis'
+    );
+  }
+
+  if (!notification || !notification.title || !notification.body) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'Notification (title + body) requis'
+    );
+  }
+
+  console.log(`[Push Function] Notification demandée par ${uid}`);
+
   try {
-    const { token, notification, data } = req.body;
-
-    // Validation
-    if (!token) {
-      res.status(400).send({ error: 'Token FCM requis' });
-      return;
-    }
-
-    if (!notification || !notification.title || !notification.body) {
-      res.status(400).send({ error: 'Notification (title + body) requis' });
-      return;
-    }
-
     // Construction du message
     const message = {
       token,
@@ -68,9 +77,9 @@ exports.sendPushNotification = functions.https.onRequest(async (req, res) => {
         body: notification.body,
       },
       data: {
-        type: data?.type || 'general',
-        url: data?.url || '/',
-        ...(data || {}),
+        type: extraData?.type || 'general',
+        url: extraData?.url || '/',
+        ...(extraData || {}),
       },
       // Android: haute priorité pour notification immédiate
       android: {
@@ -98,22 +107,35 @@ exports.sendPushNotification = functions.https.onRequest(async (req, res) => {
 
     // Envoi
     const response = await admin.messaging().send(message);
-    console.log('[Push Function] ✅ Notification envoyée avec succès:', response);
+    console.log(`[Push Function] ✅ Notification envoyée par ${uid}:`, response);
 
-    res.status(200).send({ success: true, messageId: response });
+    return { success: true, messageId: response };
   } catch (error) {
-    console.error('[Push Function] ❌ Erreur envoi notification:', error);
+    console.error(`[Push Function] ❌ Erreur (uid=${uid}):`, error);
 
     // Gestion des erreurs courantes
     if (error.code === 'messaging/invalid-argument') {
-      res.status(400).send({ error: 'Argument invalide pour le message FCM' });
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Argument invalide pour le message FCM'
+      );
     } else if (error.code === 'messaging/registration-token-not-registered') {
-      res.status(410).send({ error: 'Token FCM non enregistré (expiré ou invalide)' });
+      throw new functions.https.HttpsError(
+        'not-found',
+        'Token FCM non enregistré (expiré ou invalide)'
+      );
     } else {
-      res.status(500).send({ error: 'Erreur interne du serveur' });
+      throw new functions.https.HttpsError(
+        'internal',
+        'Erreur interne du serveur'
+      );
     }
   }
 });
+
+// ⚠️ NOTE : L'ancienne version HTTP (onRequest) a été supprimée.
+// Le client doit maintenant utiliser `firebase.functions().httpsCallable('sendPushNotification')`
+// au lieu d'un fetch() direct.
 
 /**
  * Fonction background déclenchée par Firestore pour envoyer

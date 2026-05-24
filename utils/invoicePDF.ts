@@ -2,6 +2,8 @@ import jsPDF from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import QRCode from 'qrcode';
 import { Sale } from '../types';
+import { formatDateInvoice, formatDateInvoiceShort } from './dateFormat';
+import { formatCurrency, formatNumber } from './currency';
 
 // Compagny info
 const COMPANY = {
@@ -46,23 +48,15 @@ function getLogoDataURL(): Promise<string> {
 }
 
 // Format currency
-const fmt = (n: number) => n.toLocaleString('fr-FR') + ' Frs';
+const fmt = (n: number) => formatCurrency(n);
 
 // Format date
 const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString('fr-FR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  formatDateInvoice(d);
 
 // Format short date
 const fmtDateShort = (d: string) =>
-  new Date(d).toLocaleDateString('fr-FR', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  formatDateInvoiceShort(d);
 
 // Get payment method label
 const methodLabel = (m?: string) => {
@@ -183,16 +177,15 @@ export async function generateInvoice(
   const tableBody = chickens.map((c) => [
     c.numero,
     `${c.poids} kg`,
-    `${c.prix.toLocaleString('fr-FR')} Frs`,
+    `${c.prix} Frs`,
   ]);
 
   // Total row
   tableBody.push(['', '', '']); // spacer
   tableBody.push([
     { content: 'TOTAL', colSpan: 1, styles: { fontStyle: 'bold', fontSize: 10, textColor: dark } } as any,
-    '',
-    { content: `${sale.total.toLocaleString('fr-FR')} Frs`,
-      styles: { fontStyle: 'bold', fontSize: 11, textColor: orange, halign: 'right' } } as any,
+    '',      { content: `${formatCurrency(sale.total)}`,
+          styles: { fontStyle: 'bold', fontSize: 11, textColor: orange, halign: 'right' } } as any,
   ]);
 
   autoTable(doc, {
@@ -237,7 +230,7 @@ export async function generateInvoice(
   doc.setTextColor(isPaid ? 22 : 220, isPaid ? 163 : 38, isPaid ? 74 : 38);
   doc.text(isPaid
     ? `✓ PAYÉ${sale.isCredit ? ' — Intégralement remboursé' : ' COMPTANT'}`
-    : `✗ ${sale.isCredit ? 'À CRÉDIT — Solde restant: ' + remaining.toLocaleString('fr-FR') + ' Frs' : 'NON PAYÉ'}`,
+    : `✗ ${sale.isCredit ? 'À CRÉDIT — Solde restant: ' + formatCurrency(remaining) : 'NON PAYÉ'}`,
     margin + 5, currentY + (isPaid ? 12 : 8));
 
   if (!isPaid && sale.isCredit && sale.dueDate) {
@@ -261,7 +254,7 @@ export async function generateInvoice(
     const payHead = [['Date', 'Montant', 'Mode', 'Note']];
     const payBody = payments.map((p) => [
       fmtDateShort(p.date),
-      `${p.montant.toLocaleString('fr-FR')} Frs`,
+      `${formatCurrency(p.montant)}`,
       methodLabel(p.methode),
       p.note || '—',
     ]);
@@ -271,7 +264,7 @@ export async function generateInvoice(
     payBody.push([
       { content: 'Total versé', colSpan: 2, styles: { fontStyle: 'bold', fontSize: 9 } } as any,
       '',
-      { content: `${totalPayments.toLocaleString('fr-FR')} Frs`,
+      { content: `${formatCurrency(totalPayments)}`,
         styles: { fontStyle: 'bold', fontSize: 10, halign: 'right', textColor: [22, 163, 74] } } as any,
     ]);
 
@@ -306,8 +299,8 @@ export async function generateInvoice(
     `FACTURE: ${invoiceNumber(sale, index)}`,
     `Client: ${clientName}`,
     `Date: ${fmtDate(sale.dateVente)}`,
-    `Montant: ${sale.total.toLocaleString('fr-FR')} Frs`,
-    `Statut: ${isPaid ? 'Payé' : sale.isCredit ? `Solde: ${remaining.toLocaleString('fr-FR')} Frs` : 'Non payé'}`,
+    `Montant: ${formatCurrency(sale.total)}`,
+    `Statut: ${isPaid ? 'Payé' : sale.isCredit ? `Solde: ${formatCurrency(remaining)}` : 'Non payé'}`,
   ].join(' | ');
 
   try {

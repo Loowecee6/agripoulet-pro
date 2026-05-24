@@ -29,7 +29,8 @@ L'application utilise :
 - **Firebase Firestore** (optionnel) pour la synchronisation multi-utilisateurs.
 
 ## 🔒 Sécurité
-Le code admin par défaut est `1234`. Il peut être modifié dans l'onglet **Bilan** une fois connecté en tant qu'administrateur.
+Un code administrateur protège l'accès aux fonctions sensibles (gestion des utilisateurs, modification des paramètres).
+Ce code est configurable dans l'onglet **Bilan** une fois connecté.
 
 ---
 Développé pour l'écosystème Google Cloud.

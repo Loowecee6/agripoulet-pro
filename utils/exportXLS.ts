@@ -1,4 +1,6 @@
 // Export data to XLS (CSV format compatible with Excel)
+import { formatCurrency } from './currency';
+
 export function exportToXLS(filename: string, headers: string[], rows: (string | number)[][]) {
   // BOM for Excel UTF-8
   const BOM = '\uFEFF';
@@ -71,9 +73,9 @@ export function exportBatchSummary(batchName: string, summary: {
     ['', ''],
     ['Total investi (Frs)', summary.totalInvested],
     ['Total recettes (Frs)', summary.totalRevenue],
-    ['Coût par kg (Frs)', summary.costPerKg.toFixed(0)],
+    ['Coût par kg (Frs)', formatCurrency(summary.costPerKg)],
     ['', ''],
-    ['RÉSULTAT', summary.profit >= 0 ? `BÉNÉFICE: ${summary.profit} Frs` : `PERTE: ${Math.abs(summary.profit)} Frs`],
+    ['RÉSULTAT', summary.profit >= 0 ? `BÉNÉFICE: ${formatCurrency(summary.profit)}` : `PERTE: ${formatCurrency(Math.abs(summary.profit))}`],
   ];
 
   exportToXLS(`Bilan_${batchName}`, headers, rows);

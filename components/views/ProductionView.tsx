@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Plus, Users, Coins, TrendingUp, MessageSquare, CheckCircle2, Edit2, Trash2, Download, BarChart3 } from 'lucide-react';
 import { AppData, User, ProductionBatch, DailyRecord, Expense, StockBatch, Chicken } from '../../types';
 import { PROGRAMME_VACCINATION, POIDS_THEORIQUE_REFERENCE } from '../../constants';
+import { formatDateShort } from '../../utils/dateFormat';
 import { Modal } from '../common/Modal';
 import { exportBatchExpenses } from '../../utils/exportXLS';
 import { BatchAnalytics } from '../common/BatchAnalytics';
@@ -223,7 +224,7 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
                     return (
                     <div key={realIndex} className="bg-white border border-gray-100 rounded-2xl p-3 space-y-2 shadow-sm">
                       <div className="flex items-center justify-between text-sm">
-                        <div><div className="font-bold">Jour {r.jourDeBande}</div><div className="text-[10px] text-gray-400">{new Date(r.date).toLocaleDateString()}</div></div>
+                        <div><div className="font-bold">Jour {r.jourDeBande}</div><div className="text-[10px] text-gray-400">{formatDateShort(r.date)}</div></div>
                         <div className="text-right flex items-center gap-2">
                           <div>
                             <div className="font-bold text-red-500">{r.mort} mort(s)</div>

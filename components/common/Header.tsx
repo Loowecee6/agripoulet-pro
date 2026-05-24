@@ -14,6 +14,7 @@ interface HeaderProps {
   isOnline: boolean;
   hasPendingSync: boolean;
   pendingSyncCount: number;
+  syncError?: string | null;
   onOpenNotifSettings?: () => void;
   darkMode?: boolean;
   onToggleDarkMode?: () => void;
@@ -41,7 +42,7 @@ const severityColors: Record<string, { bg: string; border: string; text: string;
   info: { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-800', dot: 'bg-blue-500' },
 };
 
-export const Header = ({ user, onLogout, notifications, overdueCount, notificationEvents = [], isSyncing, isOnline, hasPendingSync, pendingSyncCount, onOpenNotifSettings, darkMode, onToggleDarkMode, onOpenUserManagement, currentSeason, seasonWarning, onSeasonOffsetChange, seasonOffset = 0 }: HeaderProps) => {
+export const Header = ({ user, onLogout, notifications, overdueCount, notificationEvents = [], isSyncing, isOnline, hasPendingSync, pendingSyncCount, syncError, onOpenNotifSettings, darkMode, onToggleDarkMode, onOpenUserManagement, currentSeason, seasonWarning, onSeasonOffsetChange, seasonOffset = 0 }: HeaderProps) => {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showSeasonControl, setShowSeasonControl] = useState(false);
   const seasonControlRef = useRef<HTMLDivElement>(null);
@@ -61,7 +62,14 @@ export const Header = ({ user, onLogout, notifications, overdueCount, notificati
   const dangerCount = notificationEvents.filter(e => e.severity === 'danger').length;
   const totalNotifCount = notifications.length + notificationEvents.filter(e => e.severity === 'danger' || e.severity === 'warning').length;
   return (
-    <header className="bg-orange-600 text-white p-4 shadow-lg sticky top-0 z-40">
+    <header className="bg-orange-600 text-white shadow-lg sticky top-0 z-40">
+      {syncError && (
+        <div className="bg-red-600 text-white text-[10px] font-bold px-4 py-1.5 flex items-center gap-2 justify-center animate-pulse">
+          <AlertTriangle className="w-3 h-3 shrink-0" />
+          <span>{syncError}</span>
+        </div>
+      )}
+      <div className="p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="bg-white/20 p-2 rounded-xl">
@@ -302,6 +310,7 @@ export const Header = ({ user, onLogout, notifications, overdueCount, notificati
           )}
         </div>
       )}
+      </div>
     </header>
   );
 };

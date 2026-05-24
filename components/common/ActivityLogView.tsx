@@ -3,6 +3,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Clock, Filter, Search, ShieldCheck, UserCircle } from 'lucide-react';
+import { formatDateWithTime } from '../../utils/dateFormat';
 import { ActivityLogEntry, ActivityAction, User } from '../../types';
 import { formatAction, filterLogByDays } from '../../services/activityLogger';
 
@@ -152,7 +153,7 @@ export const ActivityLogView = ({ log, currentUser }: ActivityLogViewProps) => {
                 )}
               </div>
               <div className="text-[8px] text-gray-400 shrink-0 text-right whitespace-nowrap">
-                {new Date(entry.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                {formatDateWithTime(entry.date)}
               </div>
             </div>
           ))

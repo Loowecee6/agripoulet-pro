@@ -4,6 +4,8 @@ import { Users, TrendingUp, AlertTriangle, Egg, ShoppingCart,
   MessageCircle, Phone
 } from 'lucide-react';
 import { SeasonalStats } from '../common/SeasonalStats';
+import { formatDateLong, formatDateShort } from '../../utils/dateFormat';
+import { formatCurrency, formatNumber } from '../../utils/currency';
 import { formatWhatsAppUrl } from '../../utils/whatsapp';
 import { getRemainingBalance } from '../../utils/creditHelpers';
 import {
@@ -16,6 +18,7 @@ import { POIDS_THEORIQUE_REFERENCE } from '../../constants';
 
 interface DashboardViewProps {
   data: AppData;
+  onTabChange?: (tab: string) => void;
 }
 
 const COLORS = {
@@ -31,8 +34,9 @@ const COLORS = {
 
 const PIE_COLORS = ['#22c55e', '#ef4444', '#3b82f6', '#eab308'];
 
-export const DashboardView = ({ data }: DashboardViewProps) => {
+export const DashboardView = ({ data, onTabChange }: DashboardViewProps) => {
   const today = new Date().toISOString().split('T')[0];
+  const activeSales = useMemo(() => data.sales.filter(s => !('deletedAt' in s)), [data.sales]);
 
   // === KPI Calculations ===
 
@@ -51,7 +55,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
       .reduce((acc, sb) => acc + sb.poulets.filter(p => !p.vendu).length, 0);
 
     // Crédits en cours (solde restant après paiements partiels)
-    const creditsEnCours = data.sales
+    const creditsEnCours = activeSales
       .filter(s => s.isCredit)
       .reduce((sum, s) => {
         const totalPayments = (s.payments || []).reduce((pSum, p) => pSum + p.montant, 0);
@@ -59,7 +63,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
         return sum + remaining;
       }, 0);
 
-    const creditsCount = data.sales
+    const creditsCount = activeSales
       .filter(s => s.isCredit)
       .filter(s => {
         const totalPayments = (s.payments || []).reduce((pSum, p) => pSum + p.montant, 0);
@@ -67,17 +71,17 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
       }).length;
 
     // Ventes du jour
-    const ventesDuJour = data.sales
+    const ventesDuJour = activeSales
       .filter(s => s.dateVente === today)
       .reduce((sum, s) => sum + s.total, 0);
 
-    const ventesDuJourCount = data.sales.filter(s => s.dateVente === today).length;
+    const ventesDuJourCount = activeSales.filter(s => s.dateVente === today).length;
 
     // Ventes du mois
     const monthStart = new Date();
     monthStart.setDate(1);
     const monthStartStr = monthStart.toISOString().split('T')[0];
-    const ventesDuMois = data.sales
+    const ventesDuMois = activeSales
       .filter(s => s.dateVente >= monthStartStr)
       .reduce((sum, s) => sum + s.total, 0);
 
@@ -122,7 +126,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
     // Crédit échéance proche
     const todayDate = new Date();
     const soonDate = new Date(todayDate.getTime() + 3 * 86400000);
-    data.sales
+    activeSales
       .filter(s => s.isCredit && s.dueDate)
       .forEach(s => {
         const totalPayments = (s.payments || []).reduce((pSum, p) => pSum + p.montant, 0);
@@ -135,14 +139,14 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
           list.push({
             type: 'danger',
             icon: <AlertTriangle className="w-4 h-4" />,
-            message: `${daysLate}j de retard : ${s.clientNom} — ${remaining.toLocaleString()} Frs restants`,
+            message: `${daysLate}j de retard : ${s.clientNom} — ${formatCurrency(remaining)} restants`,
           });
         } else if (due <= soonDate) {
           const daysLeft = Math.floor((due.getTime() - todayDate.getTime()) / 86400000);
           list.push({
             type: 'warning',
             icon: <Clock className="w-4 h-4" />,
-            message: `Échéance J-${daysLeft} : ${s.clientNom} — ${remaining.toLocaleString()} Frs restants`,
+            message: `Échéance J-${daysLeft} : ${s.clientNom} — ${formatCurrency(remaining)} restants`,
           });
         }
       });
@@ -200,7 +204,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
-      const daySales = data.sales.filter(s => s.dateVente === dateStr);
+      const daySales = activeSales.filter(s => s.dateVente === dateStr);
       days.push({
         date: dateStr,
         total: daySales.reduce((sum, s) => sum + s.total, 0),
@@ -214,14 +218,14 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
   // === Graphique : Répartition des ventes ===
 
   const salesPieData = useMemo(() => {
-    const totalCash = data.sales.filter(s => !s.isCredit).reduce((sum, s) => sum + s.total, 0);
-    const totalCredit = data.sales
+    const totalCash = activeSales.filter(s => !s.isCredit).reduce((sum, s) => sum + s.total, 0);
+    const totalCredit = activeSales
       .filter(s => s.isCredit)
       .reduce((sum, s) => {
         const paid = (s.payments || []).reduce((pSum, p) => pSum + p.montant, 0);
         return sum + Math.max(0, s.total - paid);
       }, 0);
-    const totalPaidCredit = data.sales
+    const totalPaidCredit = activeSales
       .filter(s => s.isCredit)
       .reduce((sum, s) => sum + (s.payments || []).reduce((pSum, p) => pSum + p.montant, 0), 0);
     return [
@@ -264,7 +268,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
 
   const topClients = useMemo(() => {
     const clientTotals: Record<string, number> = {};
-    data.sales.forEach(s => {
+    activeSales.forEach(s => {
       clientTotals[s.clientNom] = (clientTotals[s.clientNom] || 0) + s.total;
     });
     return Object.entries(clientTotals)
@@ -281,7 +285,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
     let totalRecuWave = 0;
     let totalRestant = 0;
 
-    data.sales.filter(s => s.isCredit).forEach(s => {
+    activeSales.filter(s => s.isCredit).forEach(s => {
       const totalPayments = (s.payments || []).reduce((sum, p) => sum + p.montant, 0);
       totalRestant += Math.max(0, s.total - totalPayments);
 
@@ -311,7 +315,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
 
   const overdueForRelance = useMemo(() => {
     const now = new Date();
-    return data.sales
+    return activeSales
       .filter(s => s.isCredit && s.dueDate && new Date(s.dueDate) < now)
       .map(s => ({
         ...s,
@@ -328,7 +332,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
   const weeklyStats = useMemo(() => {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString().split('T')[0];
-    const weekSales = data.sales.filter(s => s.dateVente >= weekAgo);
+    const weekSales = activeSales.filter(s => s.dateVente >= weekAgo);
     const weekTotal = weekSales.reduce((sum, s) => sum + s.total, 0);
     const weekCount = weekSales.length;
     const avgPerDay = weekCount > 0 ? weekTotal / 7 : 0;
@@ -342,7 +346,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
         <div>
           <h2 className="text-xl font-bold text-gray-900">Tableau de bord</h2>
           <p className="text-xs text-gray-500 mt-1">
-            {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {formatDateLong(new Date())}
           </p>
         </div>
       </div>
@@ -372,8 +376,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
             <span className="text-[10px] bg-white/20 px-2 py-1 rounded-full font-medium">
               {stats.creditsCount} clients
             </span>
-          </div>
-          <div className="text-2xl font-black">{stats.creditsEnCours.toLocaleString()}</div>
+          </div>            <div className="text-2xl font-black">{formatNumber(stats.creditsEnCours)}</div>
           <div className="text-xs text-red-100 mt-1">Frs crédits en cours</div>
         </div>
 
@@ -387,7 +390,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
               {stats.ventesDuJourCount} ventes
             </span>
           </div>
-          <div className="text-2xl font-black">{stats.ventesDuJour.toLocaleString()}</div>
+          <div className="text-2xl font-black">{formatNumber(stats.ventesDuJour)}</div>
           <div className="text-xs text-green-100 mt-1">Frs ventes aujourd'hui</div>
         </div>
 
@@ -401,7 +404,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
               {stats.totalClients} clients
             </span>
           </div>
-          <div className="text-2xl font-black">{stats.ventesDuMois.toLocaleString()}</div>
+          <div className="text-2xl font-black">{formatNumber(stats.ventesDuMois)}</div>
           <div className="text-xs text-blue-100 mt-1">Frs ventes du mois</div>
         </div>
       </div>
@@ -415,7 +418,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
               <h3 className="text-sm font-bold text-gray-800">À relancer ({overdueForRelance.length})</h3>
             </div>
             <span className="text-[10px] font-bold text-gray-400">
-              {overdueForRelance.reduce((s, v) => s + v.remaining, 0).toLocaleString()} Frs
+              {formatCurrency(overdueForRelance.reduce((s, v) => s + v.remaining, 0))}
             </span>
           </div>
           <div className="px-4 pb-4 space-y-1.5">
@@ -427,9 +430,9 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
                   <span className="text-[9px] text-red-500 font-bold whitespace-nowrap">{s.daysLate}j</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs font-black text-red-600">{s.remaining.toLocaleString()} F</span>
+                  <span className="text-xs font-black text-red-600">{formatCurrency(s.remaining)}</span>
                   {s.client?.tel && (() => {
-                    const waMsg = `Bonjour ${s.clientNom} 👋\n\nJe me permets de vous relancer concernant le solde restant de ${s.remaining.toLocaleString()} Frs sur vos achats.\n\nMerci de bien vouloir régulariser votre situation. 🙏`;
+                    const waMsg = `Bonjour ${s.clientNom} 👋\n\nJe me permets de vous relancer concernant le solde restant de ${formatCurrency(s.remaining)} sur vos achats.\n\nMerci de bien vouloir régulariser votre situation. 🙏`;
                     const url = formatWhatsAppUrl(s.client.tel, waMsg);
                     if (!url) return null;
                     return (
@@ -449,10 +452,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
             ))}
             {overdueForRelance.length > 5 && (
               <button
-                onClick={() => {
-                  const nav = document.querySelector('[data-tab="echeances"]') as HTMLButtonElement;
-                  nav?.click();
-                }}
+                onClick={() => onTabChange?.('echeances')}
                 className="w-full text-center text-[10px] font-bold text-gray-400 py-2 hover:text-gray-600 transition-colors"
               >
                 +{overdueForRelance.length - 5} autres → Voir toutes les échéances
@@ -502,21 +502,21 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
                 <span className="w-2 h-2 rounded-full bg-green-500" />
                 <span className="text-xs font-medium text-gray-700">💵 Espèces</span>
               </div>
-              <span className="text-sm font-black text-gray-800">{creditBreakdown.especes.toLocaleString()} Frs</span>
+              <span className="text-sm font-black text-gray-800">{formatCurrency(creditBreakdown.especes)}</span>
             </div>
             <div className="flex items-center justify-between p-2.5 bg-orange-50 rounded-xl">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-orange-500" />
                 <span className="text-xs font-medium text-gray-700">📱 Orange Money</span>
               </div>
-              <span className="text-sm font-black text-gray-800">{creditBreakdown.orangeMoney.toLocaleString()} Frs</span>
+              <span className="text-sm font-black text-gray-800">{formatCurrency(creditBreakdown.orangeMoney)}</span>
             </div>
             <div className="flex items-center justify-between p-2.5 bg-blue-50 rounded-xl">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-blue-500" />
                 <span className="text-xs font-medium text-gray-700">📱 Wave</span>
               </div>
-              <span className="text-sm font-black text-gray-800">{creditBreakdown.wave.toLocaleString()} Frs</span>
+              <span className="text-sm font-black text-gray-800">{formatCurrency(creditBreakdown.wave)}</span>
             </div>
             <div className="h-px bg-gray-100 my-1" />
             <div className="flex items-center justify-between p-2.5 bg-red-50 rounded-xl">
@@ -524,11 +524,11 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
                 <span className="w-2 h-2 rounded-full bg-red-400" />
                 <span className="text-xs font-medium text-gray-700">⏳ Restant à recouvrer</span>
               </div>
-              <span className="text-sm font-black text-red-600">{creditBreakdown.totalRestant.toLocaleString()} Frs</span>
+              <span className="text-sm font-black text-red-600">{formatCurrency(creditBreakdown.totalRestant)}</span>
             </div>
             <div className="flex items-center justify-between pt-1 px-1">
               <span className="text-[10px] font-bold text-gray-500 uppercase">Total crédits</span>
-              <span className="text-xs font-black text-gray-800">{creditBreakdown.totalCredits.toLocaleString()} Frs</span>
+              <span className="text-xs font-black text-gray-800">{formatCurrency(creditBreakdown.totalCredits)}</span>
             </div>
           </div>
         </div>
@@ -541,11 +541,11 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
           <div className="text-[10px] text-gray-500 mt-1">Ventes (7j)</div>
         </div>
         <div className="bg-white rounded-2xl p-3 border border-gray-100 text-center shadow-sm">
-          <div className="text-lg font-black text-gray-800">{weeklyStats.weekTotal.toLocaleString()}</div>
+          <div className="text-lg font-black text-gray-800">            {formatNumber(weeklyStats.weekTotal)}</div>
           <div className="text-[10px] text-gray-500 mt-1">Frs (7j)</div>
         </div>
         <div className="bg-white rounded-2xl p-3 border border-gray-100 text-center shadow-sm">
-          <div className="text-lg font-black text-gray-800">{Math.round(weeklyStats.avgPerDay).toLocaleString()}</div>
+          <div className="text-lg font-black text-gray-800">            {formatNumber(Math.round(weeklyStats.avgPerDay))}</div>
           <div className="text-[10px] text-gray-500 mt-1">Frs / jour</div>
         </div>
       </div>
@@ -582,8 +582,8 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
               <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
               <Tooltip
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                formatter={(value: number) => [`${value.toLocaleString()} Frs`]}
-                labelFormatter={(label: string) => new Date(label).toLocaleDateString('fr-FR')}
+                formatter={(value: number) => [formatCurrency(value)]}
+                labelFormatter={(label: string) => formatDateShort(label)}
               />
               <Area
                 type="monotone"
@@ -657,7 +657,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
                   </Pie>
                   <Tooltip
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    formatter={(value: number) => `${value.toLocaleString()} Frs`}
+                    formatter={(value: number) => formatCurrency(value)}
                   />
                 </RePieChart>
               </ResponsiveContainer>
@@ -674,7 +674,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} />
                   <span className="text-gray-500">{d.name}</span>
                 </div>
-                <span className="font-medium text-gray-700">{d.value.toLocaleString()}</span>
+                <span className="font-medium text-gray-700">{formatNumber(d.value)}</span>
               </div>
             ))}
           </div>
@@ -702,7 +702,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
                   />
                   <Tooltip
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    formatter={(value: number) => `${value.toLocaleString()} Frs`}
+                    formatter={(value: number) => formatCurrency(value)}
                   />
                   <Bar dataKey="total" radius={[0, 4, 4, 0]} fill={COLORS.blue} />
                 </BarChart>
@@ -824,37 +824,25 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
           icon={<ShoppingCart className="w-5 h-5" />}
           label="Nouvelle vente"
           color="bg-green-500"
-          onClick={() => {
-            const nav = document.querySelector('[data-tab="ventes"]') as HTMLButtonElement;
-            nav?.click();
-          }}
+          onClick={() => onTabChange?.('ventes')}
         />
         <QuickLink
           icon={<Users className="w-5 h-5" />}
           label="Ajouter un client"
           color="bg-blue-500"
-          onClick={() => {
-            const nav = document.querySelector('[data-tab="clients"]') as HTMLButtonElement;
-            nav?.click();
-          }}
+          onClick={() => onTabChange?.('clients')}
         />
         <QuickLink
           icon={<Egg className="w-5 h-5" />}
           label="Suivi production"
           color="bg-orange-500"
-          onClick={() => {
-            const nav = document.querySelector('[data-tab="production"]') as HTMLButtonElement;
-            nav?.click();
-          }}
+          onClick={() => onTabChange?.('production')}
         />
         <QuickLink
           icon={<BarChart3 className="w-5 h-5" />}
           label="Rapport financier"
           color="bg-purple-500"
-          onClick={() => {
-            const nav = document.querySelector('[data-tab="rapport"]') as HTMLButtonElement;
-            nav?.click();
-          }}
+          onClick={() => onTabChange?.('rapport')}
         />
       </div>
     </div>

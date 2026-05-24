@@ -107,7 +107,9 @@ const getDefaultData = (): AppData => ({
     },
   ],
   settings: {
-    adminPasswordHash: '1234',
+    // Le hash ci-dessous correspond à 'admin' via SHA-256.
+    // Changez-le dans l'onglet Bilan après la première connexion.
+    adminPasswordHash: '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918',
     notifications: {
       enabled: true,
       vaccinationReminders: true,
@@ -267,22 +269,6 @@ export const storageService = {
     }
   },
 
-  async listBackups(userId: string): Promise<{ id: string; label: string; createdAt: string; data: AppData }[]> {
-    if (!userId) return [];
-    try {
-      const backupRef = getBackupsRef(userId);
-      const q = query(backupRef, orderBy('createdAt', 'desc'), limit(20));
-      const snap = await getDocs(q);
-      return snap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as { id: string; label: string; createdAt: string; data: AppData }[];
-    } catch (e) {
-      console.warn('[storageService] Failed to list backups:', e);
-      return [];
-    }
-  },
-
   async restoreBackup(userId: string, backupId: string): Promise<AppData> {
     if (!userId) throw new Error('No user');
     if (!navigator.onLine) throw new Error('La restauration nécessite une connexion Internet.');
@@ -300,10 +286,60 @@ export const storageService = {
   async deleteBackup(userId: string, backupId: string): Promise<void> {
     if (!userId) return;
     try {
+      // Soft-delete : marquer comme archivé au lieu de supprimer définitivement
       const backupRef = doc(db, 'users', userId, 'backups', backupId);
-      await deleteDoc(backupRef);
+      await setDoc(backupRef, { archived: true, archivedAt: serverTimestamp() }, { merge: true });
+      console.log('[storageService] Backup soft-deleted (archived):', backupId);
     } catch (e) {
-      console.warn('[storageService] Failed to delete backup:', e);
+      console.warn('[storageService] Failed to archive backup:', e);
+    }
+  },
+
+  /**
+   * Purge les sauvegardes archivées de plus de 90 jours
+   */
+  async purgeOldArchivedBackups(userId: string): Promise<number> {
+    if (!userId) return 0;
+    try {
+      const backupRef = getBackupsRef(userId);
+      const snap = await getDocs(backupRef);
+      const cutoff = new Date(Date.now() - 90 * 86400000);
+      let purged = 0;
+      for (const doc of snap.docs) {
+        const data = doc.data();
+        if (data.archived && data.archivedAt?.toDate?.() < cutoff) {
+          await deleteDoc(doc.ref);
+          purged++;
+        }
+      }
+      if (purged > 0) {
+        console.log('[storageService] Purged', purged, 'old archived backups');
+      }
+      return purged;
+    } catch (e) {
+      console.warn('[storageService] Failed to purge archived backups:', e);
+      return 0;
+    }
+  },
+
+  /**
+   * Liste les sauvegardes non-archivées (celles visibles dans l'UI)
+   */
+  async listBackups(userId: string): Promise<{ id: string; label: string; createdAt: string; data: AppData }[]> {
+    if (!userId) return [];
+    try {
+      const backupRef = getBackupsRef(userId);
+      const q = query(backupRef, orderBy('createdAt', 'desc'), limit(20));
+      const snap = await getDocs(q);
+      return snap.docs
+        .filter(d => !d.data().archived)
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as { id: string; label: string; createdAt: string; data: AppData }[];
+    } catch (e) {
+      console.warn('[storageService] Failed to list backups:', e);
+      return [];
     }
   },
 

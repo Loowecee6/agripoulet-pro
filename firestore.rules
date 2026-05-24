@@ -1,16 +1,145 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ── Fonctions utilitaires ──────────────────────────────────────
+
+    // Vérifie que l'utilisateur est authentifié
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Vérifie que l'UID correspond
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Vérifie que le document n'est pas trop volumineux (max 900 Ko pour garder de la marge)
+    function isSized() {
+      return request.resource.data.size() < 900000;
+    }
+
+    // Vérifie que la requête est en écriture (create ou update)
+    function isWrite() {
+      return request.method in ['create', 'update'];
+    }
+
+    // Vérifie que le champ est une liste
+    function isList(field) {
+      return field is list;
+    }
+
+    // Vérifie que le champ est un nombre
+    function isNumber(field) {
+      return field is number;
+    }
+
+    // Vérifie que le champ est une chaîne
+    function isString(field) {
+      return field is string;
+    }
+
+    // Vérifie que le champ est un booléen
+    function isBool(field) {
+      return field is bool;
+    }
+
+    // Vérifie que le champ est un timestamp
+    function isTimestamp(field) {
+      return field is timestamp;
+    }
+
+    // Vérifie que le champ est un map (objet)
+    function isMap(field) {
+      return field is map;
+    }
+
+    // ── Validation du schéma AppData ───────────────────────────────
+
+    // Validation des types pour un objet Sale
+    function validateSale(sale) {
+      return isString(sale.id)
+        && isString(sale.clientId)
+        && isString(sale.clientNom)
+        && isList(sale.pouletIds)
+        && isNumber(sale.total)
+        && isBool(sale.isCredit)
+        && isBool(sale.isPaid)
+        && isString(sale.dateVente);
+    }
+
+    // Validation des types pour un objet ProductionBatch
+    function validateProductionBatch(batch) {
+      return isString(batch.id)
+        && isString(batch.nom)
+        && isString(batch.dateMisePlace)
+        && isNumber(batch.nbPoussinsInitial)
+        && isNumber(batch.prixAchatPoussin)
+        && isList(batch.suiviQuotidien)
+        && isList(batch.depenses)
+        && isList(batch.vaccinations)
+        && batch.statut in ['active', 'cloturee'];
+    }
+
+    // Validation des types pour un objet StockBatch
+    function validateStockBatch(batch) {
+      return isString(batch.id)
+        && isString(batch.nom)
+        && isString(batch.lettre)
+        && isNumber(batch.prixKg)
+        && isList(batch.poulets);
+    }
+
+    // Validation des types pour un objet Client
+    function validateClient(client) {
+      return isString(client.id)
+        && isString(client.nom)
+        && isString(client.tel);
+    }
+
+    // Validation du document AppData complet
+    function validateAppData() {
+      let data = request.resource.data;
+      return isList(data.productionBatches)
+        && isList(data.stockBatches)
+        && isList(data.clients)
+        && isList(data.sales)
+        && isList(data.reservations)
+        && isMap(data.settings)
+        // Validation optionnelle des premiers éléments
+        && (data.sales.size() == 0 || validateSale(data.sales[0]))
+        && data.size() < 900000;
+    }
+
+    // ── Règles ─────────────────────────────────────────────────────
+
+    // Document utilisateur (profil + rôle)
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['role', 'createdAt']);
+      allow update: if isOwner(userId)
+        && request.resource.data.keys().hasAny(['role', 'updatedAt', 'displayName', 'email']);
 
-      match /appData/{document=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Sous-collection appData (données principales)
+      match /appData/{documentId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isSized();
+        allow delete: if false; // Interdire la suppression des données
       }
 
-      match /backups/{document=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Sous-collection backups (sauvegardes)
+      match /backups/{documentId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isSized();
+        allow delete: if isOwner(userId);
+        allow update: if false; // Les sauvegardes sont immutables
       }
+    }
+
+    // Collection pushQueue (pour les notifications FCM)
+    match /pushQueue/{documentId} {
+      allow read, write: if false; // Uniquement accessible par les Cloud Functions
     }
   }
 }

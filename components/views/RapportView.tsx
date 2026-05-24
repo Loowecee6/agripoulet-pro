@@ -5,6 +5,7 @@ import { Modal } from '../common/Modal';
 import { DataMigration } from '../common/DataMigration';
 import { BackupManager } from '../common/BackupManager';
 import { exportBatchExpenses, exportBatchSummary } from '../../utils/exportXLS';
+import { hashPassword } from '../../utils/crypto';
 
 interface RapportViewProps {
   data: AppData;
@@ -37,7 +38,7 @@ export const RapportView = ({ data, setData, user, permissions }: RapportViewPro
       const avgWeight = prod && prod.suiviQuotidien.length > 0
         ? prod.suiviQuotidien[prod.suiviQuotidien.length - 1].poidsReel / 1000
         : 0;
-      const costPerKg = soldCount > 0 ? Math.round(totalCost / (soldCount * avgWeight)) : 0;
+      const costPerKg = soldCount > 0 && avgWeight > 0 ? Math.round(totalCost / (soldCount * avgWeight)) : 0;
       
       return { sb, prod, totalRevenue, totalCost, totalDepenses, coutPoussins, profit, isFinished, mortality, initialCount, sales, soldCount, avgWeight, costPerKg };
     });
@@ -53,14 +54,15 @@ export const RapportView = ({ data, setData, user, permissions }: RapportViewPro
     }
   };
 
-  const handleUpdatePassword = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleUpdatePassword = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const newP = f.get('newPass') as string;
     if (newP.length < 4) return alert("Le code doit faire au moins 4 chiffres");
+    const hashed = await hashPassword(newP);
     setData({
       ...data,
-      settings: { ...data.settings, adminPasswordHash: newP }
+      settings: { ...data.settings, adminPasswordHash: hashed }
     });
     setIsChangingPass(false);
     alert("Code secret administrateur mis à jour !");

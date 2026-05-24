@@ -4,6 +4,7 @@
 import React, { useState, useMemo } from 'react';
 import { useToast } from '../common/ToastContext';
 import { Plus, CalendarDays, Clock, CheckCircle2, XCircle, ChevronRight, DollarSign, FileText, Trash2, MessageCircle, User as UserIcon, Filter } from 'lucide-react';
+import { formatDateShort, formatDateLong } from '../../utils/dateFormat';
 import { AppData, Reservation, ReservationStatut } from '../../types';
 import { Modal } from '../common/Modal';
 
@@ -242,7 +243,7 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
-                    <span className="flex items-center gap-1"><CalendarDays className="w-3 h-3" /> {new Date(r.dateReserve).toLocaleDateString('fr-FR')}</span>
+                    <span className="flex items-center gap-1"><CalendarDays className="w-3 h-3" /> {formatDateShort(r.dateReserve)}</span>
                     <span>•</span>
                     <span>{chickens.length} poulet(s)</span>
                     {r.acompte && (
@@ -364,7 +365,7 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <h3 className="text-lg font-black text-gray-900 dark:text-white">{selectedRes.clientNom}</h3>
-                    <div className="text-xs text-gray-500 mt-0.5">Créé le {new Date(selectedRes.createdAt).toLocaleDateString('fr-FR')}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">Créé le {formatDateShort(selectedRes.createdAt)}</div>
                   </div>
                   <span className={`text-[9px] font-black px-3 py-1.5 rounded-full uppercase ${cfg.bg.split(' ')[0]} ${cfg.text}`}>
                     {cfg.label}
@@ -377,7 +378,7 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
                       <CalendarDays className="w-3.5 h-3.5" />
                       <span className="font-bold uppercase">Retrait prévu</span>
                     </div>
-                    <div className="text-sm font-black">{new Date(selectedRes.dateReserve).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+                    <div className="text-sm font-black">{formatDateLong(selectedRes.dateReserve)}</div>
                   </div>
                   <div className="bg-white/70 dark:bg-gray-800/70 rounded-xl p-3">
                     <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mb-1">
@@ -467,7 +468,7 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
                   if (!client?.tel) return null;
                   const digits = client.tel.replace(/\D/g, '');
                   const international = digits.startsWith('225') ? digits : `225${digits.replace(/^0+/, '')}`;
-                  const msg = `Bonjour ${selectedRes.clientNom} 👋\n\nJe vous rappelle que votre réservation de ${chickens.length} poulet(s) est prévue pour le ${new Date(selectedRes.dateReserve).toLocaleDateString('fr-FR')}.\n\nMerci de confirmer votre venue. 🙏`;
+                  const msg = `Bonjour ${selectedRes.clientNom} 👋\n\nJe vous rappelle que votre réservation de ${chickens.length} poulet(s) est prévue pour le ${formatDateShort(selectedRes.dateReserve)}.\n\nMerci de confirmer votre venue. 🙏`;
                   return (
                     <a
                       href={`https://wa.me/${international}?text=${encodeURIComponent(msg)}`}

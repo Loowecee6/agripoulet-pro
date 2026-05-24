@@ -4,7 +4,7 @@ import { openDB, IDBPDatabase } from 'idb';
 import { AppData } from '../types';
 
 const DB_NAME = 'agripoulet-pro';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 interface SyncOperation {
   id?: number;
@@ -22,6 +22,15 @@ interface OfflineDB {
     updatedAt: number;
   };
   syncQueue: SyncOperation;
+  searchIndex: {
+    id: string;
+    type: 'sale' | 'client';
+    userId: string;
+    clientId: string;
+    clientNom: string;
+    dateVente: string;
+    total: number;
+  };
 }
 
 let dbInstance: IDBPDatabase<OfflineDB> | null = null;
@@ -39,6 +48,18 @@ async function getDB(): Promise<IDBPDatabase<OfflineDB>> {
           keyPath: 'id',
           autoIncrement: true,
         });
+      }
+      if (oldVersion < 3) {
+        // Store d'index de recherche avec indexes dédiés pour O(1) au lieu de O(n)
+        const searchIndex = db.createObjectStore('searchIndex', {
+          keyPath: 'id',
+        });
+        searchIndex.createIndex('clientId', 'clientId', { unique: false });
+        searchIndex.createIndex('dateVente', 'dateVente', { unique: false });
+        searchIndex.createIndex('type', 'type', { unique: false });
+        searchIndex.createIndex('userId', 'userId', { unique: false });
+        // Index composé pour les requêtes courantes
+        searchIndex.createIndex('userType', ['userId', 'type'], { unique: false });
       }
     },
   });
@@ -180,4 +201,92 @@ export const offlineService = {
       return false;
     }
   },
+
+  // ── Search Index (P3-M9: IndexedDB indexes pour O(1) au lieu de O(n)) ──
+
+  /**
+   * Reconstruit l'index de recherche à partir des données
+   */
+  async rebuildSearchIndex(userId: string, data: AppData): Promise<void> {
+    try {
+      const db = await getDB();
+      // Nettoyer l'ancien index
+      const tx = db.transaction('searchIndex', 'readwrite');
+      const indexStore = tx.objectStore('searchIndex');
+
+      // Ajouter les ventes à l'index
+      for (const sale of data.sales) {
+        await indexStore.put({
+          id: `sale-${sale.id}`,
+          type: 'sale' as const,
+          userId,
+          clientId: sale.clientId,
+          clientNom: sale.clientNom,
+          dateVente: sale.dateVente,
+          total: sale.total,
+        });
+      }
+
+      // Ajouter les clients à l'index
+      for (const client of data.clients) {
+        await indexStore.put({
+          id: `client-${client.id}`,
+          type: 'client' as const,
+          userId,
+          clientId: client.id,
+          clientNom: client.nom,
+          dateVente: '',
+          total: 0,
+        });
+      }
+
+      await tx.done;
+      console.log('[offlineService] Search index rebuilt:', data.sales.length + data.clients.length, 'entries');
+    } catch (e) {
+      console.error('[offlineService] Error rebuilding search index:', e);
+    }
+  },
+
+  /**
+   * Recherche par clientId dans l'index
+   */
+  async searchByClientId(userId: string, clientId: string): Promise<any[]> {
+    try {
+      const db = await getDB();
+      const index = db.transaction('searchIndex').store.index('clientId');
+      const results = await index.getAll(clientId);
+      return results.filter(r => r.userId === userId);
+    } catch (e) {
+      console.error('[offlineService] Error searching by clientId:', e);
+      return [];
+    }
+  },
+
+  /**
+   * Recherche par date de vente dans l'index
+   */
+  async searchByDateVente(userId: string, dateVente: string): Promise<any[]> {
+    try {
+      const db = await getDB();
+      const index = db.transaction('searchIndex').store.index('dateVente');
+      const results = await index.getAll(dateVente);
+      return results.filter(r => r.userId === userId);
+    } catch (e) {
+      console.error('[offlineService] Error searching by dateVente:', e);
+      return [];
+    }
+  },
 };
+
+/**
+ * Type helper pour les résultats de recherche
+ */
+export interface SearchIndexEntry {
+  id: string;
+  type: 'sale' | 'client';
+  userId: string;
+  clientId: string;
+  clientNom: string;
+  dateVente: string;
+  total: number;
+}
