@@ -122,6 +122,17 @@ const getDefaultData = (): AppData => ({
 const getUserDocRef = (userId: string) => doc(db, 'users', userId, 'appData', 'singleton');
 const getBackupsRef = (userId: string) => collection(db, 'users', userId, 'backups');
 
+function ensureAppData(d: Partial<AppData>): AppData {
+  return {
+    productionBatches: d.productionBatches ?? [],
+    stockBatches: d.stockBatches ?? [],
+    clients: d.clients ?? [],
+    sales: d.sales ?? [],
+    reservations: d.reservations ?? [],
+    settings: d.settings ?? { adminPasswordHash: '' },
+  };
+}
+
 export const storageService = {
   /**
    * Save data: write to IndexedDB instantly, then sync to Firestore.
@@ -193,10 +204,13 @@ export const storageService = {
         const d = snap.data() as AppData;
         console.log('[storageService] Data loaded from Firestore. Batches:', d.productionBatches?.length || 0);
 
-        // Cache locally for offline use
-        await offlineService.saveLocalData(userId, d);
+        // Ensure all required arrays exist (migration safety)
+        const safe = ensureAppData(d);
 
-        return d;
+        // Cache locally for offline use
+        await offlineService.saveLocalData(userId, safe);
+
+        return safe;
       }
       console.log('[storageService] No data found in Firestore');
     } catch (e) {
@@ -205,7 +219,7 @@ export const storageService = {
       const localData = await offlineService.getLocalData(userId);
       if (localData) {
         console.log('[storageService] Data loaded from local cache. Batches:', localData.productionBatches?.length || 0);
-        return localData;
+        return ensureAppData(localData);
       }
     }
 
@@ -213,7 +227,7 @@ export const storageService = {
     const localData = await offlineService.getLocalData(userId);
     if (localData) {
       console.log('[storageService] Data loaded from local cache (fallback). Batches:', localData.productionBatches?.length || 0);
-      return localData;
+      return ensureAppData(localData);
     }
 
     console.log('[storageService] No data found anywhere, returning defaults');

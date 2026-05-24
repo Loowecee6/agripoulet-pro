@@ -24,6 +24,7 @@ import { useSyncManager } from './hooks/useSyncManager';
 import { useFCMNotifications } from './hooks/useFCMNotifications';
 import { getUserRole } from './services/userService';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 export default function App() {
   const { user, signOutUser } = useAuth();
@@ -63,13 +64,18 @@ export default function App() {
     }
     const init = async () => {
       setIsInitialLoading(true);
-      const [cloudData, role] = await Promise.all([
-        storageService.loadData(user.uid),
-        getUserRole(user.uid),
-      ]);
-      setData(cloudData);
-      setUserRole(role);
-      setIsInitialLoading(false);
+      try {
+        const [cloudData, role] = await Promise.all([
+          storageService.loadData(user.uid),
+          getUserRole(user.uid),
+        ]);
+        setData(cloudData);
+        setUserRole(role);
+      } catch (err) {
+        console.error('Erreur chargement initial:', err);
+      } finally {
+        setIsInitialLoading(false);
+      }
     };
     init();
   }, [user]);
@@ -147,75 +153,77 @@ export default function App() {
   }
 
   return (
-    <div
-      className={`min-h-screen ${data?.settings.darkMode ? 'bg-gray-900' : 'bg-gray-50'} max-w-md mx-auto relative shadow-2xl flex flex-col ${data?.settings.darkMode ? 'border-gray-800' : 'border-x border-gray-100'} font-sans selection:bg-orange-100`}
-    >
-      <Header
-        user={currentUser}
-        onLogout={signOutUser}
-        notifications={notifications}
-        overdueCount={overdueCount}
-        notificationEvents={notificationEvents}
-        isSyncing={isSyncing}
-        isOnline={isOnline}
-        hasPendingSync={hasPendingSync}
-        pendingSyncCount={pendingSyncCount}
-        syncError={syncError}
-        onOpenNotifSettings={() => setShowNotifSettings(true)}
-        darkMode={data?.settings.darkMode}
-        onToggleDarkMode={toggleDarkMode}
-        onOpenUserManagement={() => setShowUserManagement(true)}
-        currentSeason={season.active || undefined}
-        seasonWarning={season.data?.warning || null}
-        onSeasonOffsetChange={handleSeasonOffsetChange}
-        seasonOffset={seasonOffset}
-      />
-      <main className="flex-1 p-4 pb-24 overflow-y-auto scroll-smooth">
-        {data && activeTab === 'dashboard' && <DashboardView data={data} onTabChange={setActiveTab} />}
-        {data && activeTab === 'dashboard' && <ProductionGoals data={data} />}
-        {data && activeTab === 'production' && (
-          <ProductionView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
-        )}
-        {data && activeTab === 'stock' && (
-          <StockView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
-        )}
-        {data && activeTab === 'ventes' && <VentesView data={data} setData={updateData} />}
-        {data && activeTab === 'clients' && <ClientsView data={data} setData={updateData} />}
-        {data && activeTab === 'echeances' && <EcheancesView data={data} />}
-        {data && activeTab === 'reservations' && <ReservationView data={data} setData={updateData} />}
-        {data && activeTab === 'rapport' && (
-          <RapportView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
-        )}
-      </main>
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+    <ErrorBoundary>
+      <div
+        className={`min-h-screen ${data?.settings.darkMode ? 'bg-gray-900' : 'bg-gray-50'} max-w-md mx-auto relative shadow-2xl flex flex-col ${data?.settings.darkMode ? 'border-gray-800' : 'border-x border-gray-100'} font-sans selection:bg-orange-100`}
+      >
+        <Header
+          user={currentUser}
+          onLogout={signOutUser}
+          notifications={notifications}
+          overdueCount={overdueCount}
+          notificationEvents={notificationEvents}
+          isSyncing={isSyncing}
+          isOnline={isOnline}
+          hasPendingSync={hasPendingSync}
+          pendingSyncCount={pendingSyncCount}
+          syncError={syncError}
+          onOpenNotifSettings={() => setShowNotifSettings(true)}
+          darkMode={data?.settings.darkMode}
+          onToggleDarkMode={toggleDarkMode}
+          onOpenUserManagement={() => setShowUserManagement(true)}
+          currentSeason={season.active || undefined}
+          seasonWarning={season.data?.warning || null}
+          onSeasonOffsetChange={handleSeasonOffsetChange}
+          seasonOffset={seasonOffset}
+        />
+        <main className="flex-1 p-4 pb-24 overflow-y-auto scroll-smooth">
+          {data && activeTab === 'dashboard' && <DashboardView data={data} onTabChange={setActiveTab} />}
+          {data && activeTab === 'dashboard' && <ProductionGoals data={data} />}
+          {data && activeTab === 'production' && (
+            <ProductionView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
+          )}
+          {data && activeTab === 'stock' && (
+            <StockView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
+          )}
+          {data && activeTab === 'ventes' && <VentesView data={data} setData={updateData} />}
+          {data && activeTab === 'clients' && <ClientsView data={data} setData={updateData} />}
+          {data && activeTab === 'echeances' && <EcheancesView data={data} />}
+          {data && activeTab === 'reservations' && <ReservationView data={data} setData={updateData} />}
+          {data && activeTab === 'rapport' && (
+            <RapportView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
+          )}
+        </main>
+        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {/* Notification Settings Modal */}
-      {data && (
-        <NotificationSettings
-          prefs={
-            data.settings.notifications || {
-              enabled: true,
-              vaccinationReminders: true,
-              mortalityAlerts: true,
-              creditDeadlines: true,
+        {/* Notification Settings Modal */}
+        {data && (
+          <NotificationSettings
+            prefs={
+              data.settings.notifications || {
+                enabled: true,
+                vaccinationReminders: true,
+                mortalityAlerts: true,
+                creditDeadlines: true,
+              }
             }
-          }
-          onSave={updateNotificationPrefs}
-          isOpen={showNotifSettings}
-          onClose={() => setShowNotifSettings(false)}
-        />
-      )}
+            onSave={updateNotificationPrefs}
+            isOpen={showNotifSettings}
+            onClose={() => setShowNotifSettings(false)}
+          />
+        )}
 
-      {/* User Management Modal */}
-      {data && currentUser && (
-        <UserManagement
-          data={data}
-          setData={setData}
-          currentUser={currentUser}
-          isOpen={showUserManagement}
-          onClose={() => setShowUserManagement(false)}
-        />
-      )}
-    </div>
+        {/* User Management Modal */}
+        {data && currentUser && (
+          <UserManagement
+            data={data}
+            setData={setData}
+            currentUser={currentUser}
+            isOpen={showUserManagement}
+            onClose={() => setShowUserManagement(false)}
+          />
+        )}
+      </div>
+    </ErrorBoundary>
   );
 }
