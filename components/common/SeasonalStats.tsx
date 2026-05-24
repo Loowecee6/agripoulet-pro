@@ -23,20 +23,25 @@ const getMortalityRate = (batch: ProductionBatch) => {
   return (totalMorts / batch.nbPoussinsInitial) * 100;
 };
 
-// Get season from month (0=Jan, 11=Dec)
+// Get season from month (0=Jan, 11=Dec) — Sénégal
 const getSeason = (month: number): string => {
-  if (month >= 2 && month <= 4) return 'Printemps';
-  if (month >= 5 && month <= 7) return 'Été';
-  if (month >= 8 && month <= 10) return 'Automne';
-  return 'Hiver';
+  if (month >= 10 || month <= 1) return 'Sèche (fraîche)'; // Nov–Fév
+  if (month >= 2 && month <= 5) return 'Sèche (chaude)';   // Mar–Juin
+  return 'Pluies (hivernage)';                               // Juil–Oct
 };
 
 // Icons for seasons
 const SEASON_ICONS: Record<string, string> = {
-  Printemps: '🌸',
-  Été: '☀️',
-  Automne: '🍂',
-  Hiver: '❄️',
+  'Sèche (fraîche)': '🌤️',
+  'Sèche (chaude)': '☀️',
+  'Pluies (hivernage)': '🌧️',
+};
+
+// Température et caractéristiques des saisons sénégalaises
+const SEASON_INFO: Record<string, { temperature: string; characteristics: string }> = {
+  'Sèche (fraîche)': { temperature: '20–30 °C', characteristics: 'Harmattan, nuits fraîches, climat agréable' },
+  'Sèche (chaude)': { temperature: '30–45 °C', characteristics: 'Forte chaleur intérieure, brise marine sur la côte' },
+  'Pluies (hivernage)': { temperature: '30–35 °C', characteristics: 'Pluies abondantes, végétation luxuriante, humidité élevée' },
 };
 
 export const SeasonalStats = ({ data }: SeasonalStatsProps) => {
@@ -65,10 +70,9 @@ export const SeasonalStats = ({ data }: SeasonalStatsProps) => {
   // ── Sales by season ──
   const seasonalSales = useMemo(() => {
     const seasons: Record<string, { total: number; count: number }> = {
-      Printemps: { total: 0, count: 0 },
-      Été: { total: 0, count: 0 },
-      Automne: { total: 0, count: 0 },
-      Hiver: { total: 0, count: 0 },
+      'Sèche (fraîche)': { total: 0, count: 0 },
+      'Sèche (chaude)': { total: 0, count: 0 },
+      'Pluies (hivernage)': { total: 0, count: 0 },
     };
 
     data.sales.forEach(s => {
@@ -238,7 +242,7 @@ export const SeasonalStats = ({ data }: SeasonalStatsProps) => {
                   dataKey="total"
                 >
                   {seasonalSales.map((_, i) => (
-                    <Cell key={i} fill={[COLORS[0], COLORS[1], COLORS[2], COLORS[3]][i % 4]} stroke="none" />
+                    <Cell key={i} fill={[COLORS[0], COLORS[1], COLORS[2]][i % 3]} stroke="none" />
                   ))}
                 </Pie>
                 <Tooltip
@@ -249,15 +253,25 @@ export const SeasonalStats = ({ data }: SeasonalStatsProps) => {
             </ResponsiveContainer>
           </div>
           <div className="space-y-0.5 mt-1">
-            {seasonalSales.map((s, i) => (
-              <div key={s.name} className="flex items-center justify-between text-[8px]">
-                <div className="flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: [COLORS[0], COLORS[1], COLORS[2], COLORS[3]][i % 4] }} />
-                  <span className="text-gray-500">{s.name}</span>
+            {seasonalSales.map((s, i) => {
+              const info = SEASON_INFO[s.name.replace(/^[^\s]+\s+/, '')] || null;
+              return (
+                <div key={s.name} className="text-[8px]">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: [COLORS[0], COLORS[1], COLORS[2]][i % 3] }} />
+                      <span className="text-gray-500">{s.name}</span>
+                    </div>
+                    <span className="font-medium text-gray-700">{s.total.toLocaleString()} F</span>
+                  </div>
+                  {info && (
+                    <div className="text-[6px] text-gray-400 ml-2.5 mt-0.5">
+                      {info.temperature} · {info.characteristics}
+                    </div>
+                  )}
                 </div>
-                <span className="font-medium text-gray-700">{s.total.toLocaleString()} F</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

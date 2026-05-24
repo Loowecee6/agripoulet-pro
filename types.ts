@@ -77,6 +77,10 @@ export interface AppSettings {
   adminPasswordHash: string;
   notifications?: NotificationPrefs;
   darkMode?: boolean;
+  /** Décalage saisonnier en jours (positif = saisons décalées plus tard). 
+   *  Permet à l'utilisateur d'ajuster manuellement les saisons 
+   *  en fonction du changement climatique. */
+  seasonOffset?: number;
 }
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';

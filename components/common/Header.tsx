@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ClipboardList, ShieldCheck, Bell, LogOut, X, Syringe, AlertTriangle, CreditCard, Settings, Moon, Sun, Users } from 'lucide-react';
 import { User, Sale } from '../../types';
 import { ConnectionStatus } from './ConnectionStatus';
@@ -18,6 +18,15 @@ interface HeaderProps {
   darkMode?: boolean;
   onToggleDarkMode?: () => void;
   onOpenUserManagement?: () => void;
+  currentSeason?: {
+    icon: string;
+    label: string;
+    temperature: string;
+    monthsLabel: string;
+  };
+  seasonWarning?: string | null;
+  onSeasonOffsetChange?: (offset: number) => void;
+  seasonOffset?: number;
 }
 
 const notifIcons: Record<string, React.ReactNode> = {
@@ -32,8 +41,22 @@ const severityColors: Record<string, { bg: string; border: string; text: string;
   info: { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-800', dot: 'bg-blue-500' },
 };
 
-export const Header = ({ user, onLogout, notifications, overdueCount, notificationEvents = [], isSyncing, isOnline, hasPendingSync, pendingSyncCount, onOpenNotifSettings, darkMode, onToggleDarkMode, onOpenUserManagement }: HeaderProps) => {
+export const Header = ({ user, onLogout, notifications, overdueCount, notificationEvents = [], isSyncing, isOnline, hasPendingSync, pendingSyncCount, onOpenNotifSettings, darkMode, onToggleDarkMode, onOpenUserManagement, currentSeason, seasonWarning, onSeasonOffsetChange, seasonOffset = 0 }: HeaderProps) => {
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showSeasonControl, setShowSeasonControl] = useState(false);
+  const seasonControlRef = useRef<HTMLDivElement>(null);
+
+  // Fermer le popover saison au clic extérieur
+  useEffect(() => {
+    if (!showSeasonControl) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (seasonControlRef.current && !seasonControlRef.current.contains(e.target as Node)) {
+        setShowSeasonControl(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showSeasonControl]);
 
   const dangerCount = notificationEvents.filter(e => e.severity === 'danger').length;
   const totalNotifCount = notifications.length + notificationEvents.filter(e => e.severity === 'danger' || e.severity === 'warning').length;
@@ -53,6 +76,72 @@ export const Header = ({ user, onLogout, notifications, overdueCount, notificati
                 hasPendingSync={hasPendingSync}
                 pendingCount={pendingSyncCount}
               />
+              {currentSeason && (
+                <div className="group relative">
+                  <button
+                    onClick={() => setShowSeasonControl(!showSeasonControl)}
+                    className="text-[10px] cursor-pointer hover:bg-white/10 rounded-lg px-1 py-0.5 transition-colors"
+                    title={`${currentSeason.label} (${currentSeason.monthsLabel}) — ${currentSeason.temperature}${seasonOffset !== 0 ? ` · décalage: ${seasonOffset}j` : ''}`}
+                  >
+                    {currentSeason.icon}
+                  </button>
+                  {seasonWarning && (
+                    <div className="absolute top-full left-0 mt-1 bg-red-600 text-white text-[8px] rounded-lg px-2 py-1 whitespace-nowrap shadow-lg z-50 hidden group-hover:block">
+                      {seasonWarning}
+                    </div>
+                  )}
+                  {/* Contrôle de décalage saisonnier */}
+                  {showSeasonControl && (
+                    <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-3 z-50 min-w-[180px]">
+                      <div className="text-[9px] font-bold text-gray-700 dark:text-gray-300 mb-2">
+                        🌍 Décalage saisonnier
+                      </div>
+                      <div className="text-[8px] text-gray-400 mb-2">
+                        Ajustez si les saisons sont décalées (changement climatique)
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => onSeasonOffsetChange?.(seasonOffset - 7)}
+                          disabled={seasonOffset <= -90}
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm active:scale-90 transition-transform ${seasonOffset <= -90 ? 'bg-gray-50 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                          title="Avancer les saisons de 7 jours"
+                        >
+                          −
+                        </button>
+                        <div className="flex-1 text-center">
+                          <div className="text-sm font-black text-gray-800 dark:text-white">
+                            {seasonOffset > 0 ? `+${seasonOffset}` : seasonOffset}
+                          </div>
+                          <div className="text-[7px] text-gray-400 uppercase tracking-wider">jours</div>
+                        </div>
+                        <button
+                          onClick={() => onSeasonOffsetChange?.(seasonOffset + 7)}
+                          disabled={seasonOffset >= 90}
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm active:scale-90 transition-transform ${seasonOffset >= 90 ? 'bg-gray-50 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                          title="Retarder les saisons de 7 jours"
+                        >
+                          +
+                        </button>
+                        <button
+                          onClick={() => onSeasonOffsetChange?.(0)}
+                          className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 flex items-center justify-center text-[9px] font-bold active:scale-90 transition-transform ml-1"
+                          title="Réinitialiser"
+                        >
+                          ↺
+                        </button>
+                      </div>
+                      <div className="text-[7px] text-gray-400 mt-2 text-center">
+                        {seasonOffset > 0
+                          ? `Saisons décalées de ${seasonOffset}j plus tard`
+                          : seasonOffset < 0
+                            ? `Saisons décalées de ${Math.abs(seasonOffset)}j plus tôt`
+                            : 'Calendrier traditionnel'
+                        }
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <p className="text-orange-200 text-[10px] mt-1 flex items-center gap-1">
               <ShieldCheck className="w-3 h-3" /> {user.name} ({user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Administrateur' : user.role === 'manager' ? 'Gestionnaire' : 'Consultation'})

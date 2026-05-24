@@ -20,6 +20,7 @@ import { NotificationSettings } from './components/common/NotificationSettings';
 import { getUserPermissions } from './utils/permissions';
 import { UserManagement } from './components/common/UserManagement';
 import { ProductionGoals } from './components/common/ProductionGoals';
+import { useCurrentSeason } from './hooks/useCurrentSeason';
 import {
   checkAllNotifications,
   showLocalNotificationsFor,
@@ -273,9 +274,34 @@ export default function App() {
     });
   };
 
+  const handleSeasonOffsetChange = (newOffset: number) => {
+    // Limiter le décalage à ±90 jours (~3 mois, max réaliste)
+    const clamped = Math.max(-90, Math.min(90, newOffset));
+    setSeasonOffset(clamped);
+    if (!data) return;
+    setData({
+      ...data,
+      settings: {
+        ...data.settings,
+        seasonOffset: clamped,
+      },
+    });
+  };
+
   const currentUser = user
     ? { id: user.uid, name: user.displayName || user.email || 'Utilisateur', role: 'admin' as const }
     : null;
+
+  // Saison actuelle avec détection météo
+  const [seasonOffset, setSeasonOffset] = useState(data?.settings.seasonOffset || 0);
+  const season = useCurrentSeason(seasonOffset);
+
+  // Mettre à jour seasonOffset quand data est chargé
+  useEffect(() => {
+    if (data?.settings.seasonOffset !== undefined) {
+      setSeasonOffset(data.settings.seasonOffset);
+    }
+  }, [data?.settings.seasonOffset]);
 
   const userPermissions = currentUser ? getUserPermissions(currentUser.role) : [];
 
@@ -298,7 +324,8 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen ${data?.settings.darkMode ? 'bg-gray-900' : 'bg-gray-50'} max-w-md mx-auto relative shadow-2xl flex flex-col ${data?.settings.darkMode ? 'border-gray-800' : 'border-x border-gray-100'} font-sans selection:bg-orange-100`}>        <Header
+    <div className={`min-h-screen ${data?.settings.darkMode ? 'bg-gray-900' : 'bg-gray-50'} max-w-md mx-auto relative shadow-2xl flex flex-col ${data?.settings.darkMode ? 'border-gray-800' : 'border-x border-gray-100'} font-sans selection:bg-orange-100`}>
+        <Header
         user={currentUser}
         onLogout={signOutUser}
         notifications={notifications}
@@ -312,6 +339,10 @@ export default function App() {
         darkMode={data?.settings.darkMode}
         onToggleDarkMode={toggleDarkMode}
         onOpenUserManagement={() => setShowUserManagement(true)}
+        currentSeason={season.active || undefined}
+        seasonWarning={season.data?.warning || null}
+        onSeasonOffsetChange={handleSeasonOffsetChange}
+        seasonOffset={seasonOffset}
       />
       <main className="flex-1 p-4 pb-24 overflow-y-auto scroll-smooth">              {data && activeTab === 'dashboard' && <DashboardView data={data} />}
               {data && activeTab === 'dashboard' && <ProductionGoals data={data} />}              {data && activeTab === 'production' && <ProductionView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />}
