@@ -20,7 +20,7 @@ export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
             <Plus className="w-6 h-6 rotate-45" />
           </button>
         </div>
-        <div className="p-4 overflow-y-auto flex-1">{children}</div>
+        <div className="p-4 pb-24 overflow-y-auto flex-1">{children}</div>
       </div>
     </div>
   );
