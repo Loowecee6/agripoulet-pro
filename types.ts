@@ -128,6 +128,7 @@ export interface ProductionBatch {
   depenses: Expense[];
   vaccinations: Vaccination[];
   statut: 'active' | 'cloturee';
+  nbAbattus?: number;
 }
 
 export interface Chicken {
@@ -148,6 +149,7 @@ export interface StockBatch {
   coutInitial: number;
   poulets: Chicken[];
   isFinalized: boolean;
+  quantite?: number;
 }
 
 export interface Client {

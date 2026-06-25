@@ -27,6 +27,7 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
   const [editingRecord, setEditingRecord] = useState<{ index: number; record: DailyRecord } | null>(null);
   const [editingExpense, setEditingExpense] = useState<{ index: number; expense: Expense } | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [abattagePartiel, setAbattagePartiel] = useState<{ quantite: number; batch: ProductionBatch } | null>(null);
 
   const handleAddBatch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -338,7 +339,7 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
                         typeOrigine: 'PR',
                         lettre: letter,
                         nom: `Bande ${selectedBatch.nom}`,
-                        prixKg: 2500, // sera modifié lors de l'étiquetage
+                        prixKg: 2500,
                         coutInitial: coutInitial,
                         poulets: [],
                         isFinalized: false
@@ -354,6 +355,20 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
                   className="w-full p-4 bg-gray-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-transform"
                 >
                   Abattage & Étiquetage
+                </button>
+
+                <button
+                  onClick={() => {
+                    const q = prompt(`Combien de poulets à abattre ? (Max: ${Math.max(0, selectedBatch.nbPoussinsInitial - (selectedBatch.nbAbattus || 0) - selectedBatch.suiviQuotidien.reduce((a, d) => a + d.mort, 0))})`, '10');
+                    if (q) {
+                      const quantite = parseInt(q);
+                      if (isNaN(quantite) || quantite <= 0) return alert('Quantité invalide.');
+                      setAbattagePartiel({ quantite, batch: selectedBatch });
+                    }
+                  }}
+                  className="w-full p-4 bg-orange-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-transform"
+                >
+                  Abattage Partiel
                 </button>
               </>
             )}
@@ -460,6 +475,91 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
               <input name="date" type="date" defaultValue={editingExpense.expense.date} className="p-3 border rounded-xl text-sm bg-white" />
             </div>
             <button type="submit" className="w-full bg-gray-900 text-white p-3 rounded-xl font-bold text-sm">Enregistrer</button>
+          </form>
+        )}
+      </Modal>
+
+      {/* Abattage Partiel Modal */}
+      <Modal isOpen={!!abattagePartiel} onClose={() => setAbattagePartiel(null)} title="Abattage Partiel">
+        {abattagePartiel && (
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const f = new FormData(e.currentTarget);
+            const quantite = parseInt(f.get('quantite') as string);
+            const prixUnitaire = parseInt(f.get('prixUnitaire') as string) || 3500;
+            if (isNaN(quantite) || quantite <= 0) return;
+
+            const batch = abattagePartiel.batch;
+            const morts = batch.suiviQuotidien.reduce((a, d) => a + d.mort, 0);
+            const restants = batch.nbPoussinsInitial - morts - (batch.nbAbattus || 0);
+            if (quantite > restants) {
+              alert(`Il ne reste que ${restants} poulets disponibles dans cette bande.`);
+              return;
+            }
+
+            const stockId = crypto.randomUUID();
+            const usedLetters = data.stockBatches.map(s => s.lettre);
+            let letter = batch.nom.charAt(0).toUpperCase();
+            if (usedLetters.includes(letter)) {
+              for (let c = 65; c <= 90; c++) {
+                if (!usedLetters.includes(String.fromCharCode(c))) {
+                  letter = String.fromCharCode(c);
+                  break;
+                }
+              }
+            }
+
+            const newStock: StockBatch = {
+              id: stockId,
+              productionBatchId: batch.id,
+              typeOrigine: 'PR',
+              lettre: letter,
+              nom: `Abattage ${batch.nom} (${quantite} pcs)`,
+              prixKg: 0,
+              coutInitial: quantite * prixUnitaire,
+              poulets: [],
+              isFinalized: true,
+              quantite,
+            };
+
+            setData({
+              ...data,
+              productionBatches: data.productionBatches.map(b =>
+                b.id === batch.id ? { ...b, nbAbattus: (b.nbAbattus || 0) + quantite } : b
+              ),
+              stockBatches: [...data.stockBatches, newStock],
+            });
+
+            setAbattagePartiel(null);
+            setSelectedBatch(null);
+            addToast(`${quantite} poulets abattus et ajoutés au stock.`, 'success');
+          }} className="space-y-3">
+            <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900/50 rounded-2xl p-4 text-sm space-y-1">
+              <p><strong>Bande :</strong> {abattagePartiel.batch.nom}</p>
+              <p><strong>Restants estimés :</strong> {abattagePartiel.batch.nbPoussinsInitial - abattagePartiel.batch.suiviQuotidien.reduce((a, d) => a + d.mort, 0) - (abattagePartiel.batch.nbAbattus || 0)} poulets</p>
+              <p className="text-orange-600 font-bold">La bande reste active après l'opération.</p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Nombre de poulets à abattre</label>
+              <input 
+                name="quantite" type="number" min="1" required
+                defaultValue={abattagePartiel.quantite}
+                className="w-full p-4 border border-gray-200 rounded-2xl text-sm outline-none bg-gray-50"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Prix unitaire estimé (FCFA)</label>
+              <input 
+                name="prixUnitaire" type="number" min="0" defaultValue="3500"
+                className="w-full p-4 border border-gray-200 rounded-2xl text-sm outline-none bg-gray-50"
+              />
+            </div>
+
+            <button type="submit" className="w-full p-4 bg-orange-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-transform">
+              Confirmer l'abattage
+            </button>
           </form>
         )}
       </Modal>

@@ -138,10 +138,10 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
               <div>
                 <h3 className="font-bold text-gray-800 dark:text-white">{batch.nom}</h3>
                 <div className="flex items-center gap-2">
-                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${batch.typeOrigine === 'PR' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                    {batch.typeOrigine === 'PR' ? 'PRODUCTION' : 'IMPORTATION'}
+                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${batch.quantite ? 'bg-orange-100 text-orange-700' : batch.typeOrigine === 'PR' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {batch.quantite ? 'LOT' : batch.typeOrigine === 'PR' ? 'PRODUCTION' : 'IMPORTATION'}
                   </span>
-                  <p className="text-[10px] text-gray-400">{batch.poulets.filter(p => !p.vendu).length} disponibles</p>
+                  <p className="text-[10px] text-gray-400">{batch.quantite ? `${batch.quantite} pcs (lot)` : `${batch.poulets.filter(p => !p.vendu).length} disponibles`}</p>
                 </div>
               </div>
             </div>
@@ -183,8 +183,32 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
       <Modal isOpen={!!selectedBatch} onClose={() => { setSelectedBatch(null); setTempPoids(''); setTempPrix(''); }} title={selectedBatch?.nom || ""}>
         {selectedBatch && (
           <div className="space-y-6">
-            {/* Phase d'étiquetage : lot vide venant de production */}
-            {selectedBatch.poulets.length === 0 && selectedBatch.typeOrigine === 'PR' && (
+            {/* Lot groupé (abattage partiel en nombre) */}
+            {selectedBatch.quantite ? (
+              <div className="bg-orange-50 border-2 border-orange-200 p-4 rounded-3xl space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center text-white font-black text-sm">#</div>
+                  <div>
+                    <h4 className="font-bold text-orange-800">Lot groupé — Abattage Partiel</h4>
+                    <p className="text-xs text-orange-600">{selectedBatch.quantite} poulets — {selectedBatch.coutInitial.toLocaleString('fr-FR')} F CFA</p>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl p-4 border border-orange-100 text-sm space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Quantité</span>
+                    <span className="font-black">{selectedBatch.quantite} pcs</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Valeur estimée</span>
+                    <span className="font-black">{selectedBatch.coutInitial.toLocaleString('fr-FR')} F</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Prix unitaire</span>
+                    <span className="font-black">{Math.round(selectedBatch.coutInitial / selectedBatch.quantite).toLocaleString('fr-FR')} F</span>
+                  </div>
+                </div>
+              </div>
+            ) : selectedBatch.poulets.length === 0 && selectedBatch.typeOrigine === 'PR' && (
               <div className="bg-red-50 border-2 border-red-200 p-4 rounded-3xl space-y-4">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center text-white font-black text-sm">!</div>
@@ -212,42 +236,44 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
               </div>
             )}
 
-            <form onSubmit={handleAddChicken} className="bg-orange-50 p-4 rounded-3xl grid grid-cols-2 gap-2">
-              <div className="col-span-2">
-                <label className="text-[10px] font-black text-orange-400 uppercase ml-1">N° Matricule Automatique ({selectedBatch.typeOrigine})</label>
-                <div className="p-3 bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-800 rounded-xl text-sm font-black text-gray-900 dark:text-white tracking-widest text-center shadow-inner">
-                  {nextChickenNumero}
+            {!selectedBatch.quantite && (
+              <form onSubmit={handleAddChicken} className="bg-orange-50 p-4 rounded-3xl grid grid-cols-2 gap-2">
+                <div className="col-span-2">
+                  <label className="text-[10px] font-black text-orange-400 uppercase ml-1">N° Matricule Automatique ({selectedBatch.typeOrigine})</label>
+                  <div className="p-3 bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-800 rounded-xl text-sm font-black text-gray-900 dark:text-white tracking-widest text-center shadow-inner">
+                    {nextChickenNumero}
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] text-gray-400 font-bold ml-1 uppercase">Poids (kg)</label>
-                <input 
-                  value={tempPoids}
-                  onChange={(e) => handlePoidsChange(e.target.value)}
-                  type="number" 
-                  min="0"
-                  step="0.01" 
-                  placeholder="Poids (kg)" 
-                  className="w-full p-3 border rounded-xl text-sm outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" 
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] text-gray-400 font-bold ml-1 uppercase">Prix Vente (Frs)</label>
-                <input 
-                  value={tempPrix}
-                  onChange={(e) => handlePrixChange(e.target.value)}
-                  type="number" 
-                  min="0"
-                  placeholder="Prix Vente (Frs)" 
-                  className="w-full p-3 border rounded-xl text-sm outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" 
-                />
-              </div>
-              <p className="col-span-2 text-[8px] text-orange-400 italic text-center">Calculé sur la base de {selectedBatch.prixKg} F/kg</p>
-              <button type="submit" className="col-span-2 bg-orange-600 text-white p-3 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform mt-2">Ajouter au stock</button>
-            </form>
+                <div className="space-y-1">
+                  <label className="text-[9px] text-gray-400 font-bold ml-1 uppercase">Poids (kg)</label>
+                  <input 
+                    value={tempPoids}
+                    onChange={(e) => handlePoidsChange(e.target.value)}
+                    type="number" 
+                    min="0"
+                    step="0.01" 
+                    placeholder="Poids (kg)" 
+                    className="w-full p-3 border rounded-xl text-sm outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] text-gray-400 font-bold ml-1 uppercase">Prix Vente (Frs)</label>
+                  <input 
+                    value={tempPrix}
+                    onChange={(e) => handlePrixChange(e.target.value)}
+                    type="number" 
+                    min="0"
+                    placeholder="Prix Vente (Frs)" 
+                    className="w-full p-3 border rounded-xl text-sm outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" 
+                  />
+                </div>
+                <p className="col-span-2 text-[8px] text-orange-400 italic text-center">Calculé sur la base de {selectedBatch.prixKg} F/kg</p>
+                <button type="submit" className="col-span-2 bg-orange-600 text-white p-3 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform mt-2">Ajouter au stock</button>
+              </form>
+            )}
 
             {/* Compteur d'étiquetage + impression QR */}
-            {selectedBatch.poulets.length > 0 && selectedBatch.typeOrigine === 'PR' && (
+            {!selectedBatch.quantite && selectedBatch.poulets.length > 0 && selectedBatch.typeOrigine === 'PR' && (
               <div className="bg-green-50 border border-green-200 p-3 rounded-2xl flex justify-between items-center">
                 <div>
                   <span className="text-xs font-bold text-green-700">Étiquetés : {selectedBatch.poulets.length} poulet(s)</span>
@@ -275,6 +301,7 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
               </div>
             )}
 
+            {!selectedBatch.quantite && (
             <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
               <h4 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1 mb-2">Contenu du Stock</h4>
               {selectedBatch.poulets.length === 0 && <p className="text-center text-xs text-gray-300 py-4 italic">Aucun poulet dans ce lot — commencez l'étiquetage</p>}
@@ -313,6 +340,7 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
                 );
               })}
             </div>
+            )}
             
             {can('stock.delete') && !selectedBatch.isFinalized && (
               <button 
