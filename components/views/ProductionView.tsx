@@ -354,21 +354,17 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
                   }}
                   className="w-full p-4 bg-gray-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-transform"
                 >
-                  Abattage & Étiquetage
+                  Abattage Total & Étiquetage
                 </button>
 
                 <button
                   onClick={() => {
-                    const q = prompt(`Combien de poulets à abattre ? (Max: ${Math.max(0, selectedBatch.nbPoussinsInitial - (selectedBatch.nbAbattus || 0) - selectedBatch.suiviQuotidien.reduce((a, d) => a + d.mort, 0))})`, '10');
-                    if (q) {
-                      const quantite = parseInt(q);
-                      if (isNaN(quantite) || quantite <= 0) return alert('Quantité invalide.');
-                      setAbattagePartiel({ quantite, batch: selectedBatch });
-                    }
+                    const restants = selectedBatch.nbPoussinsInitial - selectedBatch.suiviQuotidien.reduce((a, d) => a + d.mort, 0) - (selectedBatch.nbAbattus || 0);
+                    setAbattagePartiel({ quantite: Math.min(10, restants), batch: selectedBatch });
                   }}
                   className="w-full p-4 bg-orange-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-transform"
                 >
-                  Abattage Partiel
+                  Abattage
                 </button>
               </>
             )}
