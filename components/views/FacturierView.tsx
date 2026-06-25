@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ArrowLeft, Plus, Trash2, Download, Copy, Send, Receipt, User, Phone, Calendar, Check, AlertCircle } from 'lucide-react';
 import { AppData, Client } from '../../types';
 import { formatWhatsAppUrl } from '../../utils/whatsapp';
@@ -72,6 +72,12 @@ export const FacturierView = ({ data, onBack, darkMode }: FacturierViewProps) =>
     'Gros poulet'
   ];
   const QUICK_PRICES = [3500, 4000, 4500, 5000];
+
+  const itemsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    itemsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [items.length]);
 
   // --- Actions ---
   const handleAddItem = () => {
@@ -558,6 +564,7 @@ export const FacturierView = ({ data, onBack, darkMode }: FacturierViewProps) =>
               </div>
             ))}
           </div>
+          <div ref={itemsEndRef} />
         </div>
 
         {/* SECTION 3 : DETAILED TICKET PREVIEW */}
