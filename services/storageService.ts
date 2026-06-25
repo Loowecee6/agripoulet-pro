@@ -188,6 +188,7 @@ export const storageService = {
 
   /**
    * Load data: try Firestore first, fallback to IndexedDB cache.
+   * Priorité : shared doc > cache local > doc personnel (migration) > défaut
    */
   async loadData(userId: string): Promise<AppData> {
     if (!userId) {
@@ -195,12 +196,11 @@ export const storageService = {
       return getDefaultData();
     }
 
+    // 1. Shared document (source de vérité)
     try {
-      // Try Firestore first (shared document)
       const sharedRef = getSharedDataRef();
       console.log('[storageService] Loading data from shared Firestore document.');
       const sharedSnap = await getDoc(sharedRef);
-
       if (sharedSnap.exists()) {
         const d = sharedSnap.data() as AppData;
         console.log('[storageService] Data loaded from shared Firestore. Batches:', d.productionBatches?.length || 0);
@@ -208,27 +208,17 @@ export const storageService = {
         await offlineService.saveLocalData(userId, safe);
         return safe;
       }
-
-      // Shared doc not found → try to migrate from personal per-user document
-      console.log('[storageService] No shared data found, checking personal data...');
-      const personalRef = doc(db, 'users', userId, 'appData', 'singleton');
-      const personalSnap = await getDoc(personalRef);
-      if (personalSnap.exists()) {
-        const personalData = personalSnap.data() as AppData;
-        const safe = ensureAppData(personalData);
-        console.log('[storageService] Migrating personal data to shared document. Batches:', safe.productionBatches.length);
-        await setDoc(sharedRef, safe);
-        await offlineService.saveLocalData(userId, safe);
-        await offlineService.clearSyncQueue();
-        return safe;
-      }
     } catch (e) {
-      console.warn('[storageService] Firestore load failed, trying local cache:', e);
+      console.warn('[storageService] Failed to read shared doc:', e);
+    }
+
+    // 2. Cache local (contient les données les plus récentes, ex: restauration de backup)
+    try {
       const localData = await offlineService.getLocalData(userId);
-      if (localData) {
+      if (localData && (localData.productionBatches?.length || localData.stockBatches?.length)) {
         console.log('[storageService] Data loaded from local cache. Batches:', localData.productionBatches?.length || 0);
         const safe = ensureAppData(localData);
-        // Push local data to shared doc (migration for users whose personal doc is blocked by rules)
+        // Pousser vers le document partagé
         try {
           await setDoc(getSharedDataRef(), safe);
           console.log('[storageService] Local data pushed to shared document.');
@@ -238,14 +228,36 @@ export const storageService = {
         }
         return safe;
       }
+    } catch (e) {
+      console.warn('[storageService] Failed to read local cache:', e);
     }
 
-    // Try local cache as final fallback
-    const localData = await offlineService.getLocalData(userId);
-    if (localData) {
-      console.log('[storageService] Data loaded from local cache (fallback). Batches:', localData.productionBatches?.length || 0);
-      return ensureAppData(localData);
+    // 3. Document personnel Firestore (migration depuis l'ancien stockage individuel)
+    try {
+      console.log('[storageService] No shared data or local cache, checking personal data...');
+      const personalRef = doc(db, 'users', userId, 'appData', 'singleton');
+      const personalSnap = await getDoc(personalRef);
+      if (personalSnap.exists()) {
+        const personalData = personalSnap.data() as AppData;
+        const safe = ensureAppData(personalData);
+        console.log('[storageService] Migrating personal data to shared document. Batches:', safe.productionBatches.length);
+        await setDoc(getSharedDataRef(), safe);
+        await offlineService.clearSyncQueue();
+        // Ne pas écraser le cache local (sera mis à jour à la prochaine sauvegarde)
+        return safe;
+      }
+    } catch (e) {
+      console.warn('[storageService] Failed to read personal doc:', e);
     }
+
+    // 4. Dernier recours : cache local même vide
+    try {
+      const localData = await offlineService.getLocalData(userId);
+      if (localData) {
+        console.log('[storageService] Data loaded from local cache (fallback). Batches:', localData.productionBatches?.length || 0);
+        return ensureAppData(localData);
+      }
+    } catch (_) {}
 
     console.log('[storageService] No data found anywhere, returning defaults');
     return getDefaultData();
