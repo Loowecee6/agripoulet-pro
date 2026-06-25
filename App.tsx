@@ -38,13 +38,13 @@ export default function App() {
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [isForcingSync, setIsForcingSync] = useState(false);
+  const [syncFlash, setSyncFlash] = useState<string | null>(null);
 
   // ── Vérification version : vide le cache local si le code a changé ──
   const [versionChecked, setVersionChecked] = useState(false);
   useEffect(() => {
     const cached = localStorage.getItem('app_version');
     if (cached !== APP_VERSION) {
-      // Vider IndexedDB (données mises en cache) et recharger
       try {
         const req = indexedDB.deleteDatabase('agripoulet-pro');
         req.onsuccess = () => {};
@@ -56,7 +56,6 @@ export default function App() {
       setVersionChecked(true);
     }
   }, []);
-  if (!versionChecked) return null;
 
   // ── Hook : Synchronisation Firestore + Offline Queue ──
   const isOnline = useOnlineStatus();
@@ -113,7 +112,6 @@ export default function App() {
       const ok = await storageService.forceSync(user.uid, data);
       if (ok) setSyncFlash('✅ Sync réussie');
       else {
-        // Tenter une écriture directe pour voir l'erreur exacte
         try {
           const { setDoc } = await import('firebase/firestore');
           const { doc } = await import('firebase/firestore');
@@ -131,7 +129,6 @@ export default function App() {
     }
   }, [user, data, isForcingSync]);
 
-  const [syncFlash, setSyncFlash] = useState<string | null>(null);
   useEffect(() => {
     if (syncFlash) {
       const t = setTimeout(() => setSyncFlash(null), 2500);
@@ -147,14 +144,15 @@ export default function App() {
 
   // ── État local : saison ──
   const [seasonOffset, setSeasonOffset] = useState(data?.settings.seasonOffset || 0);
-
   useEffect(() => {
     if (data?.settings.seasonOffset !== undefined) {
       setSeasonOffset(data.settings.seasonOffset);
     }
   }, [data?.settings.seasonOffset]);
-
   const season = useCurrentSeason(seasonOffset);
+
+  // ── Blocage du rendu tant que la version n'est pas vérifiée ──
+  if (!versionChecked) return null;
 
   // ── Helpers ──
   const updateData = (newData: AppData) => setData(newData);
