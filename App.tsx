@@ -27,6 +27,8 @@ import { getUserRole } from './services/userService';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
+const APP_VERSION = 'v5';
+
 export default function App() {
   const { user, signOutUser } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -36,6 +38,31 @@ export default function App() {
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [isForcingSync, setIsForcingSync] = useState(false);
+
+  // ── Vérification version : force le rechargement propre si le code a changé ──
+  const [versionChecked, setVersionChecked] = useState(false);
+  useEffect(() => {
+    const cached = localStorage.getItem('app_version');
+    if (cached !== APP_VERSION) {
+      (async () => {
+        // Vider le cache du service worker ET IndexedDB
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map(r => r.unregister()));
+        }
+        indexedDB.deleteDatabase('agripoulet-pro').catch(() => {});
+        localStorage.setItem('app_version', APP_VERSION);
+        window.location.reload();
+      })();
+    } else {
+      setVersionChecked(true);
+    }
+  }, []);
+  if (!versionChecked) return null;
 
   // ── Hook : Synchronisation Firestore + Offline Queue ──
   const isOnline = useOnlineStatus();
