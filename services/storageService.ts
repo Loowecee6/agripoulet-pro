@@ -119,7 +119,7 @@ const getDefaultData = (): AppData => ({
   },
 });
 
-const getUserDocRef = (userId: string) => doc(db, 'users', userId, 'appData', 'singleton');
+const getSharedDataRef = () => doc(db, 'sharedData', 'appData', 'singleton');
 const getBackupsRef = (userId: string) => collection(db, 'users', userId, 'backups');
 
 function ensureAppData(d: Partial<AppData>): AppData {
@@ -147,10 +147,10 @@ export const storageService = {
     // 1. Always save locally first (fast, works offline)
     await offlineService.saveLocalData(userId, data);
 
-    // 2. Try to sync to Firestore
+    // 2. Try to sync to Firestore (shared document for all users)
     try {
-      const docRef = getUserDocRef(userId);
-      console.log('[storageService] Saving data to Firestore for user:', userId, 'Batches:', data.productionBatches.length);
+      const docRef = getSharedDataRef();
+      console.log('[storageService] Saving data to shared Firestore document. Batches:', data.productionBatches.length);
 
       // Remove any undefined values recursively (Firestore rejects them)
       const sanitize = (obj: any): any => {
@@ -195,26 +195,32 @@ export const storageService = {
     }
 
     try {
-      // Try Firestore first
-      const docRef = getUserDocRef(userId);
-      console.log('[storageService] Loading data from Firestore for user:', userId);
-      const snap = await getDoc(docRef);
+      // Try Firestore first (shared document)
+      const sharedRef = getSharedDataRef();
+      console.log('[storageService] Loading data from shared Firestore document.');
+      const sharedSnap = await getDoc(sharedRef);
 
-      if (snap.exists()) {
-        const d = snap.data() as AppData;
-        console.log('[storageService] Data loaded from Firestore. Batches:', d.productionBatches?.length || 0);
-
-        // Ensure all required arrays exist (migration safety)
+      if (sharedSnap.exists()) {
+        const d = sharedSnap.data() as AppData;
+        console.log('[storageService] Data loaded from shared Firestore. Batches:', d.productionBatches?.length || 0);
         const safe = ensureAppData(d);
-
-        // Cache locally for offline use
         await offlineService.saveLocalData(userId, safe);
-
         return safe;
       }
-      console.log('[storageService] No data found in Firestore');
+
+      // Shared doc not found → try to migrate from personal per-user document
+      console.log('[storageService] No shared data found, checking personal data...');
+      const personalRef = doc(db, 'users', userId, 'appData', 'singleton');
+      const personalSnap = await getDoc(personalRef);
+      if (personalSnap.exists()) {
+        const personalData = personalSnap.data() as AppData;
+        const safe = ensureAppData(personalData);
+        console.log('[storageService] Migrating personal data to shared document. Batches:', safe.productionBatches.length);
+        await setDoc(sharedRef, safe);
+        await offlineService.saveLocalData(userId, safe);
+        return safe;
+      }
     } catch (e) {
-      // If Firestore fails (offline), try local cache
       console.warn('[storageService] Firestore load failed, trying local cache:', e);
       const localData = await offlineService.getLocalData(userId);
       if (localData) {
@@ -239,7 +245,7 @@ export const storageService = {
    */
   async forceSync(userId: string, data: AppData): Promise<boolean> {
     try {
-      const docRef = getUserDocRef(userId);
+      const docRef = getSharedDataRef();
       const sanitize = (obj: any): any => {
         if (Array.isArray(obj)) return obj.map(i => sanitize(i) ?? null);
         if (obj && typeof obj === 'object') {
