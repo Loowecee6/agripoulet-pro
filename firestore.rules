@@ -131,6 +131,12 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll(['role', 'createdAt']);
       allow update: if isOwner(userId) || isAdmin();
 
+      // Sous-collection appData (ancienne, en cours de migration vers sharedData)
+      // Accessible en lecture pour le propriétaire ou l'admin (migration)
+      match /appData/{document} {
+        allow read: if isOwner(userId) || isAdmin();
+      }
+
       // Sous-collection backups (sauvegardes)
       match /backups/{documentId} {
         allow read: if isOwner(userId);

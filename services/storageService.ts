@@ -119,7 +119,7 @@ const getDefaultData = (): AppData => ({
   },
 });
 
-const getSharedDataRef = () => doc(db, 'sharedData', 'appData', 'singleton');
+const getSharedDataRef = () => doc(db, 'sharedData', 'singleton');
 const getBackupsRef = (userId: string) => collection(db, 'users', userId, 'backups');
 
 function ensureAppData(d: Partial<AppData>): AppData {
@@ -178,6 +178,7 @@ export const storageService = {
       const cleanData = sanitize(data);
       await setDoc(docRef, cleanData);
       console.log('[storageService] Data synced to Firestore successfully');
+      await offlineService.clearSyncQueue();
     } catch (e) {
       // If Firestore fails (offline), queue for later sync
       console.warn('[storageService] Firestore sync failed, queuing for later:', e);
@@ -218,6 +219,7 @@ export const storageService = {
         console.log('[storageService] Migrating personal data to shared document. Batches:', safe.productionBatches.length);
         await setDoc(sharedRef, safe);
         await offlineService.saveLocalData(userId, safe);
+        await offlineService.clearSyncQueue();
         return safe;
       }
     } catch (e) {
@@ -225,7 +227,16 @@ export const storageService = {
       const localData = await offlineService.getLocalData(userId);
       if (localData) {
         console.log('[storageService] Data loaded from local cache. Batches:', localData.productionBatches?.length || 0);
-        return ensureAppData(localData);
+        const safe = ensureAppData(localData);
+        // Push local data to shared doc (migration for users whose personal doc is blocked by rules)
+        try {
+          await setDoc(getSharedDataRef(), safe);
+          console.log('[storageService] Local data pushed to shared document.');
+          await offlineService.clearSyncQueue();
+        } catch (writeErr) {
+          console.warn('[storageService] Could not write local cache to shared doc:', writeErr);
+        }
+        return safe;
       }
     }
 
@@ -258,6 +269,8 @@ export const storageService = {
         return obj;
       };
       await setDoc(docRef, sanitize(data));
+      // Clear stale pending sync operations (they contain older data)
+      await offlineService.clearSyncQueue();
       console.log('[storageService] Force sync successful');
       return true;
     } catch (e) {
@@ -300,6 +313,8 @@ export const storageService = {
     // Save restored data to main doc and local cache
     await this.forceSync(userId, backup.data);
     await offlineService.saveLocalData(userId, backup.data);
+    // Clear any stale pending sync operations (they contain pre-restore data)
+    await offlineService.clearSyncQueue();
     return backup.data;
   },
 

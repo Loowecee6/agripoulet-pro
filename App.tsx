@@ -72,6 +72,8 @@ export default function App() {
         ]);
         setData(cloudData);
         setUserRole(role);
+
+
       } catch (err) {
         console.error('Erreur chargement initial:', err);
       } finally {
