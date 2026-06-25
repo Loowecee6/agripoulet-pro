@@ -119,10 +119,10 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'];
     }
 
-    // ── Données partagées (tous les utilisateurs authentifiés) ─────
+    // ── Données partagées (lecture pour tous, écriture admin uniquement) ─────
     match /sharedData/{document} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && isSized();
+      allow create, update: if isAdmin() && isSized();
       allow delete: if false;
     }
 

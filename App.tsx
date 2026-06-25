@@ -65,7 +65,7 @@ export default function App() {
     syncError,
     hasPendingSync,
     pendingSyncCount,
-  } = useSyncManager({ user, data, isInitialLoading, isOnline });
+  } = useSyncManager({ user, data, isInitialLoading, isOnline, isAdmin: userRole === 'admin' || userRole === 'super_admin' });
 
   // ── Hook : Auto-backup automatique ──
   useAutoBackup(data, user, isInitialLoading);

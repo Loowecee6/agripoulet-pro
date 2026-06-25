@@ -10,6 +10,7 @@ interface UseSyncManagerOptions {
   data: AppData | null;
   isInitialLoading: boolean;
   isOnline: boolean;
+  isAdmin: boolean;
 }
 
 interface SyncManagerResult {
@@ -26,6 +27,7 @@ export function useSyncManager({
   data,
   isInitialLoading,
   isOnline,
+  isAdmin,
 }: UseSyncManagerOptions): SyncManagerResult {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export function useSyncManager({
 
   // Process pending sync queue when coming back online
   const processSyncQueue = useCallback(async () => {
-    if (!user) return;
+    if (!user || !isAdmin) return;
     const queue = await offlineService.getSyncQueue();
     if (queue.length === 0) return;
 
@@ -87,7 +89,7 @@ export function useSyncManager({
 
     setIsSyncing(false);
     await refreshPendingSync();
-  }, [user, refreshPendingSync]);
+  }, [user, isAdmin, refreshPendingSync]);
 
   // Process queue when coming back online
   useEffect(() => {
@@ -113,7 +115,11 @@ export function useSyncManager({
     pendingSaveRef.current = setTimeout(async () => {
       setIsSyncing(true);
       try {
-        await storageService.saveData(user.uid, data);
+        if (isAdmin) {
+          await storageService.saveData(user.uid, data);
+        } else {
+          await offlineService.saveLocalData(user.uid, data);
+        }
         isDirtyRef.current = false;
         setSyncError(null);
       } catch (e) {
@@ -129,7 +135,7 @@ export function useSyncManager({
         clearTimeout(pendingSaveRef.current);
       }
     };
-  }, [data, user, isInitialLoading]);
+  }, [data, user, isInitialLoading, isAdmin]);
 
   // Flush unsaved changes on unmount
   useEffect(() => {
