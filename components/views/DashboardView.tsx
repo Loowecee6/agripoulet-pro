@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Users, TrendingUp, AlertTriangle, Egg, ShoppingCart,
   CreditCard, BarChart3, PieChart, Target, Droplets, Clock,
-  MessageCircle, Phone
+  MessageCircle, Phone, Receipt, ChevronRight
 } from 'lucide-react';
 import { SeasonalStats } from '../common/SeasonalStats';
 import { formatDateLong, formatDateShort } from '../../utils/dateFormat';
@@ -406,6 +406,25 @@ export const DashboardView = ({ data, onTabChange }: DashboardViewProps) => {
           </div>
           <div className="text-2xl font-black">{formatNumber(stats.ventesDuMois)}</div>
           <div className="text-xs text-blue-100 mt-1">Frs ventes du mois</div>
+        </div>
+      </div>
+
+      {/* === Actions Rapides / Facturier === */}
+      <div 
+        onClick={() => onTabChange?.('facturier')}
+        className="bg-white dark:bg-gray-800 rounded-3xl p-4 border border-gray-100 dark:border-gray-700 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-sm"
+      >
+        <div className="flex items-center gap-3">
+          <div className="bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 p-3 rounded-2xl">
+            <Receipt className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Factures rapides</h3>
+            <p className="text-sm font-bold text-gray-800 dark:text-gray-200 mt-0.5">Facturier Mobile (WhatsApp)</p>
+          </div>
+        </div>
+        <div className="bg-gray-50 dark:bg-gray-700/50 text-gray-400 p-2 rounded-xl border border-gray-100 dark:border-gray-700">
+          <ChevronRight className="w-4 h-4" />
         </div>
       </div>
 

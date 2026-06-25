@@ -17,9 +17,10 @@ import { useSalesActions } from '../../hooks/useSalesActions';
 interface VentesViewProps {
   data: AppData;
   setData: (d: AppData) => void;
+  onTabChange?: (tab: string) => void;
 }
 
-export const VentesView = ({ data, setData }: VentesViewProps) => {
+export const VentesView = ({ data, setData, onTabChange }: VentesViewProps) => {
   const { addToast } = useToast();
 
   const {
@@ -49,7 +50,17 @@ export const VentesView = ({ data, setData }: VentesViewProps) => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold dark:text-white">Ventes & Crédits</h2>
-        <button onClick={() => setIsAddModalOpen(true)} className="bg-orange-600 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-transform"><Plus /></button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => onTabChange?.('facturier')}
+            className="flex items-center gap-1.5 bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 px-4 py-3 rounded-2xl border border-orange-100/50 dark:border-orange-900/30 text-xs font-bold active:scale-95 transition-transform"
+            title="Facturier mobile WhatsApp"
+          >
+            <Receipt className="w-4 h-4 shrink-0" />
+            <span>Facturier</span>
+          </button>
+          <button onClick={() => setIsAddModalOpen(true)} className="bg-orange-600 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-transform"><Plus /></button>
+        </div>
       </div>
 
       <SearchBar value={search} onChange={setSearch} placeholder="Chercher un client..." />

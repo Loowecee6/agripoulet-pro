@@ -14,6 +14,7 @@ import { RapportView } from './components/views/RapportView';
 import { DashboardView } from './components/views/DashboardView';
 import { ReservationView } from './components/views/ReservationView';
 import { EcheancesView } from './components/views/EcheancesView';
+import { FacturierView } from './components/views/FacturierView';
 import { NotificationSettings } from './components/common/NotificationSettings';
 import { getUserPermissions } from './utils/permissions';
 import { UserManagement } from './components/common/UserManagement';
@@ -186,12 +187,15 @@ export default function App() {
           {data && activeTab === 'stock' && (
             <StockView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
           )}
-          {data && activeTab === 'ventes' && <VentesView data={data} setData={updateData} />}
+          {data && activeTab === 'ventes' && <VentesView data={data} setData={updateData} onTabChange={setActiveTab} />}
           {data && activeTab === 'clients' && <ClientsView data={data} setData={updateData} />}
           {data && activeTab === 'echeances' && <EcheancesView data={data} />}
           {data && activeTab === 'reservations' && <ReservationView data={data} setData={updateData} />}
           {data && activeTab === 'rapport' && (
             <RapportView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
+          )}
+          {data && activeTab === 'facturier' && (
+            <FacturierView data={data} onBack={() => setActiveTab('dashboard')} darkMode={data.settings.darkMode} />
           )}
         </main>
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />

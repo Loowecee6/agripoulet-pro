@@ -18,13 +18,13 @@ export const BottomNav = ({ activeTab, onTabChange }: BottomNavProps) => {
     { id: 'rapport', label: 'Bilan', icon: BarChart3 },
   ];
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around p-2 pb-safe z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex overflow-x-auto gap-2 px-2 py-2 pb-safe z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] scroll-smooth snap-x">
       {navItems.map((item) => (
         <button
           key={item.id}
           data-tab={item.id}
           onClick={() => onTabChange(item.id)}
-          className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${activeTab === item.id ? 'text-orange-600' : 'text-gray-400'}`}
+          className={`flex-shrink-0 flex flex-col items-center justify-center gap-1 p-2 min-w-[70px] rounded-xl transition-all snap-start ${activeTab === item.id ? 'text-orange-600 bg-orange-50' : 'text-gray-400'}`}
         >
           <item.icon className={`w-6 h-6 ${activeTab === item.id ? 'scale-110' : ''}`} />
           <span className="text-[10px] font-medium">{item.label}</span>
