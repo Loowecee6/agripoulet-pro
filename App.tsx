@@ -91,9 +91,20 @@ export default function App() {
     try {
       const ok = await storageService.forceSync(user.uid, data);
       if (ok) setSyncFlash('✅ Sync réussie');
-      else setSyncFlash('❌ Échec de la sync');
-    } catch {
-      setSyncFlash('❌ Erreur');
+      else {
+        // Tenter une écriture directe pour voir l'erreur exacte
+        try {
+          const { setDoc } = await import('firebase/firestore');
+          const { doc } = await import('firebase/firestore');
+          const { db } = await import('./services/firebaseConfig');
+          await setDoc(doc(db, 'sharedData', 'singleton'), data);
+          setSyncFlash('✅ Sync directe réussie');
+        } catch (directErr: any) {
+          setSyncFlash('❌ ' + (directErr?.message || 'Erreur inconnue'));
+        }
+      }
+    } catch (e: any) {
+      setSyncFlash('❌ ' + (e?.message || 'Erreur'));
     } finally {
       setIsForcingSync(false);
     }
