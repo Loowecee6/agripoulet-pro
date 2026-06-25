@@ -83,6 +83,14 @@ export default function App() {
     init();
   }, [user]);
 
+  // ── Console helper : force l'envoi des données locales vers le serveur ──
+  useEffect(() => {
+    if (user && data) {
+      (window as any).forceSyncToServer = () =>
+        storageService.forceSync(user.uid, data);
+    }
+  }, [user, data]);
+
   // ── État local : saison ──
   const [seasonOffset, setSeasonOffset] = useState(data?.settings.seasonOffset || 0);
 
