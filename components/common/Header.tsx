@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ClipboardList, ShieldCheck, Bell, LogOut, X, Syringe, AlertTriangle, CreditCard, Settings, Moon, Sun, Users } from 'lucide-react';
+import { ShieldCheck, Bell, LogOut, X, Syringe, AlertTriangle, CreditCard, Settings, Moon, Sun, Users } from 'lucide-react';
 import { User, Sale } from '../../types';
 import { ConnectionStatus } from './ConnectionStatus';
 import type { NotificationEvent } from '../../services/notificationService';
@@ -71,10 +71,7 @@ export const Header = ({ user, onLogout, notifications, overdueCount, notificati
       )}
       <div className="p-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="bg-white/20 p-2 rounded-xl">
-            <ClipboardList className="w-6 h-6" />
-          </div>
+        <div className="flex items-center gap-2">
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold leading-none">AgriPoulet Pro</h1>

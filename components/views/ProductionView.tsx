@@ -130,7 +130,7 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 cursor-pointer" onClick={() => setSelectedBatch(batch)}>
-              <div className="flex items-center gap-2"><Users className="w-4 h-4" /><span>{batch.nbPoussinsInitial - batch.suiviQuotidien.reduce((acc, r) => acc + r.mort, 0)} vivants</span></div>
+              <div className="flex items-center gap-2"><Users className="w-4 h-4" /><span>{batch.nbPoussinsInitial - batch.suiviQuotidien.reduce((acc, r) => acc + r.mort, 0) - (batch.nbAbattus || 0)} vivants</span></div>
               <div className="flex items-center gap-2"><Coins className="w-4 h-4" /><span>{batch.depenses.reduce((acc, d) => acc + d.montant, 0) + (batch.nbPoussinsInitial * batch.prixAchatPoussin)} Frs</span></div>
             </div>
           </div>
@@ -482,7 +482,8 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
             e.preventDefault();
             const f = new FormData(e.currentTarget);
             const quantite = parseInt(f.get('quantite') as string);
-            const prixUnitaire = parseInt(f.get('prixUnitaire') as string) || 3500;
+            const prixKg = parseInt(f.get('prixKg') as string) || 2500;
+            const poidsTotal = parseFloat(f.get('poidsTotal') as string) || 0;
             if (isNaN(quantite) || quantite <= 0) return;
 
             const batch = abattagePartiel.batch;
@@ -511,8 +512,9 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
               typeOrigine: 'PR',
               lettre: letter,
               nom: `Abattage ${batch.nom} (${quantite} pcs)`,
-              prixKg: 0,
-              coutInitial: quantite * prixUnitaire,
+              prixKg,
+              coutInitial: poidsTotal > 0 ? prixKg * poidsTotal : quantite * prixKg,
+              poidsTotal: poidsTotal > 0 ? poidsTotal : undefined,
               poulets: [],
               isFinalized: true,
               quantite,
@@ -546,10 +548,19 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Prix unitaire estimé (FCFA)</label>
+              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Prix au kilo (FCFA/kg)</label>
               <input 
-                name="prixUnitaire" type="number" min="0" defaultValue="3500"
+                name="prixKg" type="number" min="0" defaultValue="2500"
                 className="w-full p-4 border border-gray-200 rounded-2xl text-sm outline-none bg-gray-50"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Poids total (kg)</label>
+              <input 
+                name="poidsTotal" type="number" min="0" step="0.1"
+                className="w-full p-4 border border-gray-200 rounded-2xl text-sm outline-none bg-gray-50"
+                placeholder="Ex: 45.5"
               />
             </div>
 

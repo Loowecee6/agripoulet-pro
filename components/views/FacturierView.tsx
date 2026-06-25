@@ -16,6 +16,7 @@ interface FactureItem {
   designation: string;
   qte: number;
   prixU: number;
+  poids: number;
 }
 
 export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierViewProps) => {
@@ -37,7 +38,7 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
 
   // --- Items Table State ---
   const [items, setItems] = useState<FactureItem[]>([
-    { id: '1', designation: 'Poulet vif', qte: 1, prixU: 4000 }
+    { id: '1', designation: 'Poulet de chair', qte: 1, prixU: 4000, poids: 1.5 }
   ]);
   const [activeItemIndex, setActiveItemIndex] = useState<number>(0);
 
@@ -62,16 +63,6 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
     return items.reduce((sum, item) => sum + (item.qte * item.prixU), 0);
   }, [items]);
 
-  // --- Predefined chicken descriptions and prices ---
-  const PRESET_ITEMS = [
-    'Poulet vif',
-    'Poulet abattu',
-    'Poulet plumé',
-    'Poulet rôti',
-    'Poulet fumé',
-    'Poulet de chair',
-    'Gros poulet'
-  ];
   const QUICK_PRICES = [3500, 4000, 4500, 5000];
 
   const itemsEndRef = useRef<HTMLDivElement>(null);
@@ -83,7 +74,7 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
   // --- Actions ---
   const handleAddItem = () => {
     const newId = String(Date.now() + Math.random());
-    setItems([...items, { id: newId, designation: 'Poulet vif', qte: 1, prixU: 4000 }]);
+    setItems([...items, { id: newId, designation: 'Poulet de chair', qte: 1, prixU: 4000, poids: 1.5 }]);
     setActiveItemIndex(items.length);
   };
 
@@ -175,20 +166,23 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
       if (clientTel) {
         ctx.fillText(`Tél : ${clientTel}`, 25, 214);
       }
+      const nbPoulets = items.reduce((s, i) => s + i.qte, 0);
+      ctx.fillText(`Nb de poulets : ${nbPoulets}`, 25, clientTel ? 232 : 214);
 
-      drawDottedLine(230);
+      const infoEnd = clientTel ? 232 : 214;
+      drawDottedLine(infoEnd + 18);
 
       // Table Header
       ctx.font = 'bold 11px "Inter", sans-serif';
       ctx.fillStyle = '#1e293b';
-      ctx.fillText('Désignation', 25, 250);
+      ctx.fillText('Désignation', 25, infoEnd + 40);
       ctx.textAlign = 'right';
-      ctx.fillText('Prix (F)', 475, 250);
+      ctx.fillText('Prix (F)', 475, infoEnd + 40);
 
-      drawDottedLine(262);
+      drawDottedLine(infoEnd + 52);
 
       // Table items
-      let currentY = 285;
+      let currentY = infoEnd + 75;
       ctx.font = 'medium 11px "Inter", sans-serif';
       ctx.fillStyle = '#334155';
 
@@ -533,31 +527,17 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
 
                 {/* Grid Inputs */}
                 <div className="grid grid-cols-12 gap-2">
-                  {/* Designation */}
-                  <div className="col-span-12 sm:col-span-6 space-y-1">
-                    <label className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase">Désignation du Poulet</label>
-                    <select
-                      value={item.designation}
-                      onChange={(e) => handleUpdateItem(index, 'designation', e.target.value)}
-                      className="w-full p-2.5 border border-gray-100 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-xs dark:text-white"
-                    >
-                      {PRESET_ITEMS.map(p => <option key={p} value={p}>{p}</option>)}
-                      <option value="Autre">-- Autre (Saisie manuelle) --</option>
-                    </select>
-                    {item.designation === 'Autre' && (
-                      <input 
-                        type="text"
-                        placeholder="Saisir désignation..."
-                        value={item.designation === 'Autre' ? '' : item.designation}
-                        onChange={(e) => handleUpdateItem(index, 'designation', e.target.value)}
-                        className="w-full p-2.5 mt-1 border border-gray-100 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-xs dark:text-white"
-                      />
-                    )}
+                  {/* Designation (fixe) */}
+                  <div className="col-span-12 sm:col-span-3 space-y-1">
+                    <label className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase">Désignation</label>
+                    <div className="w-full p-2.5 border border-gray-100 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                      Poulet de chair
+                    </div>
                   </div>
 
                   {/* Quantity */}
-                  <div className="col-span-5 space-y-1">
-                    <label className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase">Quantité</label>
+                  <div className="col-span-3 space-y-1">
+                    <label className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase">Qté</label>
                     <input 
                       type="number" 
                       min="1"
@@ -567,9 +547,21 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
                     />
                   </div>
 
+                  {/* Weight per chicken */}
+                  <div className="col-span-3 space-y-1">
+                    <label className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase">Poids/pc (kg)</label>
+                    <input 
+                      type="number" 
+                      min="0" step="0.1"
+                      value={item.poids}
+                      onChange={(e) => handleUpdateItem(index, 'poids', Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="w-full p-2.5 border border-gray-100 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-xs text-center dark:text-white"
+                    />
+                  </div>
+
                   {/* Unit Price */}
-                  <div className="col-span-7 space-y-1">
-                    <label className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase font-black">Prix Unitaire (F)</label>
+                  <div className="col-span-3 space-y-1">
+                    <label className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase font-black">Prix U (F)</label>
                     <input 
                       type="number" 
                       min="0"
@@ -577,6 +569,14 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
                       onChange={(e) => handleUpdateItem(index, 'prixU', Math.max(0, parseInt(e.target.value) || 0))}
                       className="w-full p-2.5 border border-gray-100 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-xs text-right font-black text-orange-600 dark:text-orange-400"
                     />
+                  </div>
+
+                  {/* Info row: total weight & price/kg */}
+                  <div className="col-span-12 flex gap-3 text-[10px] text-gray-400 mt-1">
+                    <span>Poids total : <strong className="text-gray-600 dark:text-gray-300">{(item.qte * item.poids).toFixed(1)} kg</strong></span>
+                    {item.poids > 0 && (
+                      <span>Prix/kg : <strong className="text-gray-600 dark:text-gray-300">{Math.round(item.prixU / item.poids).toLocaleString('fr-FR')} F</strong></span>
+                    )}
                   </div>
                 </div>
 
@@ -631,6 +631,7 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
               <div><span className="font-bold">DATE :</span> {new Date(dateFacture).toLocaleDateString('fr-FR')}</div>
               <div><span className="font-bold">CLIENT :</span> {clientNom || 'Client de passage'}</div>
               {clientTel && <div><span className="font-bold">TÉL :</span> {clientTel}</div>}
+              <div><span className="font-bold">POULETS :</span> {items.reduce((s, i) => s + i.qte, 0)}</div>
               <div className="border-b border-dashed border-gray-300 pt-2" />
             </div>
 

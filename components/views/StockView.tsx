@@ -198,8 +198,24 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
                     <span className="text-gray-500">Quantité</span>
                     <span className="font-black">{selectedBatch.quantite} pcs</span>
                   </div>
+                  {selectedBatch.poidsTotal && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Poids total</span>
+                      <span className="font-black">{selectedBatch.poidsTotal.toFixed(1)} kg</span>
+                    </div>
+                  )}
+                  {selectedBatch.poidsTotal && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Poids moyen</span>
+                      <span className="font-black">{(selectedBatch.poidsTotal / selectedBatch.quantite).toFixed(3)} kg</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Valeur estimée</span>
+                    <span className="text-gray-500">Prix au kilo</span>
+                    <span className="font-black">{selectedBatch.prixKg.toLocaleString('fr-FR')} F/kg</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Valeur totale</span>
                     <span className="font-black">{selectedBatch.coutInitial.toLocaleString('fr-FR')} F</span>
                   </div>
                   <div className="flex justify-between">

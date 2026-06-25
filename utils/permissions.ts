@@ -67,6 +67,7 @@ export function canManageRole(actorRole: UserRole, targetRole: UserRole): boolea
     super_admin: 4,
     admin: 3,
     manager: 2,
+    facturier: 1,
     viewer: 1,
   };
   return (hierarchy[actorRole] || 0) > (hierarchy[targetRole] || 0);

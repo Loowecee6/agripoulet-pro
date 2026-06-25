@@ -1,5 +1,5 @@
 
-export type UserRole = 'super_admin' | 'admin' | 'manager' | 'viewer';
+export type UserRole = 'super_admin' | 'admin' | 'manager' | 'facturier' | 'viewer';
 
 export interface User {
   id: string;
@@ -25,6 +25,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   { id: 'stock.delete', label: 'Supprimer stock', description: 'Supprimer des poulets du stock' },
   { id: 'stock.view', label: 'Voir stock', description: 'Consulter le stock' },
   { id: 'ventes.create', label: 'Créer vente', description: 'Enregistrer une vente' },
+  { id: 'ventes.facturier', label: 'Facturier mobile', description: 'Accéder au générateur de factures WhatsApp' },
   { id: 'ventes.edit', label: 'Modifier vente', description: 'Modifier/supprimer une vente' },
   { id: 'ventes.view', label: 'Voir ventes', description: 'Consulter les ventes' },
   { id: 'clients.create', label: 'Créer client', description: 'Ajouter un client' },
@@ -50,6 +51,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'reservations.create', 'reservations.edit',
     'rapports.view',
   ],
+  facturier: [
+    'production.view',
+    'stock.view',
+    'ventes.facturier',
+  ],
   viewer: [
     'production.view',
     'stock.view',
@@ -63,6 +69,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   super_admin: 'Super Administrateur',
   admin: 'Administrateur',
   manager: 'Gestionnaire',
+  facturier: 'Facturier',
   viewer: 'Consultation',
 };
 
@@ -150,6 +157,7 @@ export interface StockBatch {
   poulets: Chicken[];
   isFinalized: boolean;
   quantite?: number;
+  poidsTotal?: number;
 }
 
 export interface Client {

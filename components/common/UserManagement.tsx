@@ -1,12 +1,13 @@
 // components/common/UserManagement.tsx
 // Gestion multi-utilisateurs : rôles, permissions personnalisées, journal d'activité
 
-import React, { useState, useMemo } from 'react';
-import { ShieldCheck, Users, KeyRound, Activity, X, Check, ChevronDown, ChevronUp, Settings } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { ShieldCheck, Users, KeyRound, Activity, X, Check, ChevronDown, ChevronUp, Settings, Loader2 } from 'lucide-react';
 import { AppData, User, UserRole, ALL_PERMISSIONS, Permission } from '../../types';
 import { getRoleLabel, canManageRole, getUserPermissions } from '../../utils/permissions';
 import { ActivityLogView } from './ActivityLogView';
 import { withActivityLog } from '../../services/activityLogger';
+import { getAllUsers as fetchAllUsers, setUserRole } from '../../services/userService';
 
 interface UserManagementProps {
   data: AppData;
@@ -18,35 +19,38 @@ interface UserManagementProps {
 
 type Tab = 'users' | 'permissions' | 'activity';
 
-// Utilisateurs simulés (dans un vrai déploiement, synchronisé avec Firebase Auth)
-const SAMPLE_USERS: { uid: string; email: string; displayName: string }[] = [
-  { uid: 'local-1', email: 'admin@agripoulet.com', displayName: 'Admin Principal' },
-  { uid: 'local-2', email: 'manager@agripoulet.com', displayName: 'Gestionnaire Stock' },
-  { uid: 'local-3', email: 'viewer@agripoulet.com', displayName: 'Consultant Externe' },
-];
-
 export const UserManagement = ({ data, setData, currentUser, isOpen, onClose }: UserManagementProps) => {
   const [tab, setTab] = useState<Tab>('users');
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [editingPermissions, setEditingPermissions] = useState<string | null>(null);
   const [customPerms, setCustomPerms] = useState<string[]>([]);
+  const [firestoreUsers, setFirestoreUsers] = useState<{ id: string; name: string; role: UserRole }[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // Les utilisateurs connus : currentUser + les utilisateurs enregistrés dans data.userPermissions
+  // Charger les vrais utilisateurs Firestore à l'ouverture
+  useEffect(() => {
+    if (isOpen) {
+      setLoadingUsers(true);
+      fetchAllUsers().then(users => {
+        setFirestoreUsers(users);
+        setLoadingUsers(false);
+      }).catch(() => setLoadingUsers(false));
+    }
+  }, [isOpen]);
+
+  // Fusion : currentUser (toujours visible) + utilisateurs Firestore
   const knownUsers = useMemo(() => {
     const map = new Map<string, { id: string; name: string; role: UserRole }>();
     map.set(currentUser.id, currentUser);
-
-    // Ajouter les utilisateurs échantillons
-    SAMPLE_USERS.forEach(u => {
-      if (!map.has(u.uid)) {
-        map.set(u.uid, { id: u.uid, name: u.displayName, role: 'viewer' });
+    firestoreUsers.forEach(u => {
+      if (!map.has(u.id)) {
+        map.set(u.id, u);
       }
     });
-
     return Array.from(map.values());
-  }, [currentUser]);
+  }, [currentUser, firestoreUsers]);
 
-  const handleRoleChange = (userId: string, newRole: UserRole) => {
+  const handleRoleChange = async (userId: string, newRole: UserRole) => {
     if (!canManageRole(currentUser.role, newRole)) {
       alert('Vous ne pouvez pas attribuer un rôle égal ou supérieur au vôtre.');
       return;
@@ -55,13 +59,19 @@ export const UserManagement = ({ data, setData, currentUser, isOpen, onClose }: 
     const user = knownUsers.find(u => u.id === userId);
     if (!user) return;
 
-    setData(withActivityLog(
-      data, currentUser, 'users.edit',
-      `${currentUser.name} a changé le rôle de ${user.name} → ${getRoleLabel(newRole)}`,
-      { targetUser: user.name, oldRole: user.role, newRole },
-    ));
-    // Note: dans un déploiement réel, ceci synchroniserait avec Firebase Auth custom claims
-    alert(`✅ Rôle de ${user.name} changé : ${getRoleLabel(newRole)}\n\n(En production, ceci serait synchronisé avec Firebase Auth.)`);
+    try {
+      await setUserRole(userId, newRole);
+      // Mettre à jour la liste locale
+      setFirestoreUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+      setData(withActivityLog(
+        data, currentUser, 'users.edit',
+        `${currentUser.name} a changé le rôle de ${user.name} → ${getRoleLabel(newRole)}`,
+        { targetUser: user.name, oldRole: user.role, newRole },
+      ));
+      alert(`✅ Rôle de ${user.name} changé : ${getRoleLabel(newRole)}`);
+    } catch (e) {
+      alert('❌ Erreur lors de la mise à jour du rôle.');
+    }
   };
 
   const handleCustomPermissionToggle = (userId: string, permId: string) => {
@@ -116,8 +126,9 @@ export const UserManagement = ({ data, setData, currentUser, isOpen, onClose }: 
 
   const roleColors: Record<UserRole, string> = {
     super_admin: 'bg-purple-100 text-purple-700',
-    admin: 'bg-orange-100 text-orange-700',
+    admin: 'bg-red-100 text-red-700',
     manager: 'bg-blue-100 text-blue-700',
+    facturier: 'bg-orange-100 text-orange-700',
     viewer: 'bg-gray-100 text-gray-600',
   };
 
@@ -160,7 +171,17 @@ export const UserManagement = ({ data, setData, currentUser, isOpen, onClose }: 
           {/* ── TAB : Utilisateurs ── */}
           {tab === 'users' && (
             <div className="space-y-2">
-              {knownUsers.map(user => {
+              {loadingUsers ? (
+                <div className="flex items-center justify-center py-8 text-gray-400 text-xs gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Chargement des utilisateurs...
+                </div>
+              ) : knownUsers.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-xs">
+                  Aucun utilisateur trouvé.
+                </div>
+              ) :
+              knownUsers.map(user => {
                 const isSelf = user.id === currentUser.id;
                 const canChange = canManageRole(currentUser.role, user.role);
                 const isExpanded = expandedUser === user.id;
@@ -237,12 +258,12 @@ export const UserManagement = ({ data, setData, currentUser, isOpen, onClose }: 
                 );
               })}
 
-              {/* Note */}
+              {!loadingUsers && (
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-[10px] text-blue-700">
                 <ShieldCheck className="w-3.5 h-3.5 inline mr-1" />
-                La gestion des utilisateurs est synchronisée avec Firebase Auth.
-                Les modifications de rôles sont appliquées localement et seront synchronisées au prochain déploiement cloud.
+                Les modifications de rôles sont appliquées en temps réel dans Firestore.
               </div>
+              )}
             </div>
           )}
 

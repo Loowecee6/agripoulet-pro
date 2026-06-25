@@ -9,7 +9,7 @@
  *   - createdAt: Firestore Timestamp
  */
 
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import type { UserRole } from '../types';
 import { hashPassword } from '../utils/crypto';
@@ -18,25 +18,55 @@ const DEFAULT_ROLE: UserRole = 'viewer';
 
 /**
  * Récupère le rôle d'un utilisateur depuis Firestore.
+ * Sauvegarde aussi l'email/displayName si fournis.
  * Retourne 'viewer' par défaut si le document n'existe pas.
  */
-export async function getUserRole(uid: string): Promise<UserRole> {
+export async function getUserRole(uid: string, email?: string, displayName?: string): Promise<UserRole> {
   try {
     const userDoc = doc(db, 'users', uid);
     const snap = await getDoc(userDoc);
     if (snap.exists()) {
       const data = snap.data();
+      const updates: Record<string, unknown> = {};
+      if (email && email !== data.email) updates.email = email;
+      if (displayName && displayName !== data.displayName) updates.displayName = displayName;
+      if (Object.keys(updates).length > 0) {
+        await setDoc(userDoc, { ...updates, updatedAt: serverTimestamp() }, { merge: true });
+      }
       return (data.role as UserRole) || DEFAULT_ROLE;
     }
-    // Document non trouvé → créer avec rôle par défaut + admin hash global
+    // Document non trouvé → créer avec rôle par défaut
     await setDoc(userDoc, {
       role: DEFAULT_ROLE,
+      email: email || '',
+      displayName: displayName || '',
       createdAt: serverTimestamp(),
     });
     return DEFAULT_ROLE;
   } catch (e) {
     console.warn('[userService] Erreur chargement rôle, fallback viewer:', e);
     return DEFAULT_ROLE;
+  }
+}
+
+/**
+ * Liste tous les utilisateurs enregistrés dans Firestore.
+ * Nécessite que les règles Firestory permettent la lecture.
+ */
+export async function getAllUsers(): Promise<{ id: string; name: string; role: UserRole }[]> {
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    return snap.docs.map(doc => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        name: (d.displayName as string) || (d.email as string) || doc.id.slice(0, 8),
+        role: (d.role as UserRole) || DEFAULT_ROLE,
+      };
+    });
+  } catch (e) {
+    console.warn('[userService] Erreur liste utilisateurs:', e);
+    return [];
   }
 }
 

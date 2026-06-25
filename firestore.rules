@@ -113,13 +113,18 @@ service cloud.firestore {
 
     // ── Règles ─────────────────────────────────────────────────────
 
+    // Vérifie si l'utilisateur connecté est admin ou super_admin
+    function isAdmin() {
+      return isAuthenticated()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'];
+    }
+
     // Document utilisateur (profil + rôle)
     match /users/{userId} {
-      allow read: if isOwner(userId);
+      allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId)
         && request.resource.data.keys().hasAll(['role', 'createdAt']);
-      allow update: if isOwner(userId)
-        && request.resource.data.keys().hasAny(['role', 'updatedAt', 'displayName', 'email']);
+      allow update: if isOwner(userId) || isAdmin();
 
       // Sous-collection appData (données principales)
       match /appData/{documentId} {

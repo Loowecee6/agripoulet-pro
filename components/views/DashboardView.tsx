@@ -19,6 +19,7 @@ import { POIDS_THEORIQUE_REFERENCE } from '../../constants';
 interface DashboardViewProps {
   data: AppData;
   onTabChange?: (tab: string) => void;
+  permissions?: string[];
 }
 
 const COLORS = {
@@ -34,7 +35,7 @@ const COLORS = {
 
 const PIE_COLORS = ['#22c55e', '#ef4444', '#3b82f6', '#eab308'];
 
-export const DashboardView = ({ data, onTabChange }: DashboardViewProps) => {
+export const DashboardView = ({ data, onTabChange, permissions = [] }: DashboardViewProps) => {
   const today = new Date().toISOString().split('T')[0];
   const activeSales = useMemo(() => data.sales.filter(s => !('deletedAt' in s)), [data.sales]);
 
@@ -410,6 +411,7 @@ export const DashboardView = ({ data, onTabChange }: DashboardViewProps) => {
       </div>
 
       {/* === Actions Rapides / Facturier === */}
+      {permissions.includes('ventes.facturier') && (
       <div 
         onClick={() => onTabChange?.('facturier')}
         className="bg-white dark:bg-gray-800 rounded-3xl p-4 border border-gray-100 dark:border-gray-700 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-sm"
@@ -427,6 +429,7 @@ export const DashboardView = ({ data, onTabChange }: DashboardViewProps) => {
           <ChevronRight className="w-4 h-4" />
         </div>
       </div>
+      )}
 
       {/* === Relance WhatsApp groupée === */}
       {overdueForRelance.length > 0 && (

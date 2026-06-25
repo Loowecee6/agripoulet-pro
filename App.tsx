@@ -68,7 +68,7 @@ export default function App() {
       try {
         const [cloudData, role] = await Promise.all([
           storageService.loadData(user.uid),
-          getUserRole(user.uid),
+          getUserRole(user.uid, user.email || undefined, user.displayName || undefined),
         ]);
         setData(cloudData);
         setUserRole(role);
@@ -179,26 +179,34 @@ export default function App() {
           seasonOffset={seasonOffset}
         />
         <main className="flex-1 p-4 pb-24 overflow-y-auto scroll-smooth">
-          {data && activeTab === 'dashboard' && <DashboardView data={data} onTabChange={setActiveTab} />}
+          {data && activeTab === 'dashboard' && <DashboardView data={data} onTabChange={setActiveTab} permissions={userPermissions} />}
           {data && activeTab === 'dashboard' && <ProductionGoals data={data} />}
-          {data && activeTab === 'production' && (
+          {data && activeTab === 'production' && userPermissions.includes('production.view') && (
             <ProductionView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
           )}
-          {data && activeTab === 'stock' && (
+          {data && activeTab === 'stock' && userPermissions.includes('stock.view') && (
             <StockView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
           )}
-          {data && activeTab === 'ventes' && <VentesView data={data} setData={updateData} onTabChange={setActiveTab} />}
-          {data && activeTab === 'clients' && <ClientsView data={data} setData={updateData} />}
-          {data && activeTab === 'echeances' && <EcheancesView data={data} />}
-          {data && activeTab === 'reservations' && <ReservationView data={data} setData={updateData} />}
-          {data && activeTab === 'rapport' && (
+          {data && activeTab === 'ventes' && userPermissions.includes('ventes.view') && (
+            <VentesView data={data} setData={updateData} onTabChange={setActiveTab} permissions={userPermissions} />
+          )}
+          {data && activeTab === 'clients' && userPermissions.includes('clients.view') && (
+            <ClientsView data={data} setData={updateData} />
+          )}
+          {data && activeTab === 'echeances' && userPermissions.includes('ventes.view') && (
+            <EcheancesView data={data} />
+          )}
+          {data && activeTab === 'reservations' && (userPermissions.includes('reservations.create') || userPermissions.includes('reservations.edit')) && (
+            <ReservationView data={data} setData={updateData} />
+          )}
+          {data && activeTab === 'rapport' && userPermissions.includes('rapports.view') && (
             <RapportView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
           )}
-          {data && activeTab === 'facturier' && (
+          {data && activeTab === 'facturier' && userPermissions.includes('ventes.facturier') && (
             <FacturierView data={data} setData={updateData} onBack={() => setActiveTab('dashboard')} darkMode={data.settings.darkMode} />
           )}
         </main>
-        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} permissions={userPermissions} />
 
         {/* Notification Settings Modal */}
         {data && (
