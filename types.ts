@@ -54,7 +54,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   facturier: [
     'production.view',
     'stock.view',
+    'ventes.view',
     'ventes.facturier',
+    'clients.view',
   ],
   viewer: [
     'production.view',
