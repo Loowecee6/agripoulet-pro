@@ -28,6 +28,8 @@ interface HeaderProps {
   seasonWarning?: string | null;
   onSeasonOffsetChange?: (offset: number) => void;
   seasonOffset?: number;
+  onForceSync?: () => void;
+  isForcingSync?: boolean;
 }
 
 const notifIcons: Record<string, React.ReactNode> = {
@@ -42,7 +44,7 @@ const severityColors: Record<string, { bg: string; border: string; text: string;
   info: { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-800', dot: 'bg-blue-500' },
 };
 
-export const Header = ({ user, onLogout, notifications, overdueCount, notificationEvents = [], isSyncing, isOnline, hasPendingSync, pendingSyncCount, syncError, onOpenNotifSettings, darkMode, onToggleDarkMode, onOpenUserManagement, currentSeason, seasonWarning, onSeasonOffsetChange, seasonOffset = 0 }: HeaderProps) => {
+export const Header = ({ user, onLogout, notifications, overdueCount, notificationEvents = [], isSyncing, isOnline, hasPendingSync, pendingSyncCount, syncError, onOpenNotifSettings, darkMode, onToggleDarkMode, onOpenUserManagement, currentSeason, seasonWarning, onSeasonOffsetChange, seasonOffset = 0, onForceSync, isForcingSync }: HeaderProps) => {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showSeasonControl, setShowSeasonControl] = useState(false);
   const seasonControlRef = useRef<HTMLDivElement>(null);
@@ -81,6 +83,16 @@ export const Header = ({ user, onLogout, notifications, overdueCount, notificati
                 hasPendingSync={hasPendingSync}
                 pendingCount={pendingSyncCount}
               />
+              {(hasPendingSync || user.role === 'admin' || user.role === 'super_admin') && onForceSync && (
+                <button
+                  onClick={onForceSync}
+                  disabled={isForcingSync || isSyncing}
+                  className="text-[10px] bg-white/15 hover:bg-white/25 disabled:opacity-50 rounded-lg px-1.5 py-0.5 transition-colors"
+                  title="Forcer la synchronisation vers le serveur"
+                >
+                  {isForcingSync ? 'Sync…' : 'Sync'}
+                </button>
+              )}
               {currentSeason && (
                 <div className="group relative">
                   <button

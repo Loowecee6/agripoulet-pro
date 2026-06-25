@@ -35,6 +35,7 @@ export default function App() {
   const [showNotifSettings, setShowNotifSettings] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [isForcingSync, setIsForcingSync] = useState(false);
 
   // ── Hook : Synchronisation Firestore + Offline Queue ──
   const isOnline = useOnlineStatus();
@@ -83,13 +84,34 @@ export default function App() {
     init();
   }, [user]);
 
-  // ── Console helper : force l'envoi des données locales vers le serveur ──
+  // ── Helper console + forceSync avec retour visuel ──
+  const handleForceSync = useCallback(async () => {
+    if (!user || !data || isForcingSync) return;
+    setIsForcingSync(true);
+    try {
+      const ok = await storageService.forceSync(user.uid, data);
+      if (ok) setSyncFlash('✅ Sync réussie');
+      else setSyncFlash('❌ Échec de la sync');
+    } catch {
+      setSyncFlash('❌ Erreur');
+    } finally {
+      setIsForcingSync(false);
+    }
+  }, [user, data, isForcingSync]);
+
+  const [syncFlash, setSyncFlash] = useState<string | null>(null);
+  useEffect(() => {
+    if (syncFlash) {
+      const t = setTimeout(() => setSyncFlash(null), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [syncFlash]);
+
   useEffect(() => {
     if (user && data) {
-      (window as any).forceSyncToServer = () =>
-        storageService.forceSync(user.uid, data);
+      (window as any).forceSyncToServer = handleForceSync;
     }
-  }, [user, data]);
+  }, [user, data, handleForceSync]);
 
   // ── État local : saison ──
   const [seasonOffset, setSeasonOffset] = useState(data?.settings.seasonOffset || 0);
@@ -168,6 +190,11 @@ export default function App() {
       <div
         className={`min-h-screen ${data?.settings.darkMode ? 'bg-gray-900' : 'bg-gray-50'} max-w-md mx-auto relative shadow-2xl flex flex-col ${data?.settings.darkMode ? 'border-gray-800' : 'border-x border-gray-100'} font-sans selection:bg-orange-100`}
       >
+        {syncFlash && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-2xl z-50 transition-all duration-300">
+            {syncFlash}
+          </div>
+        )}
         <Header
           user={currentUser}
           onLogout={signOutUser}
@@ -187,6 +214,8 @@ export default function App() {
           seasonWarning={season.data?.warning || null}
           onSeasonOffsetChange={handleSeasonOffsetChange}
           seasonOffset={seasonOffset}
+          onForceSync={handleForceSync}
+          isForcingSync={isForcingSync}
         />
         <main className="flex-1 p-4 pb-24 overflow-y-auto scroll-smooth">
           {data && activeTab === 'dashboard' && <DashboardView data={data} onTabChange={setActiveTab} permissions={userPermissions} />}
