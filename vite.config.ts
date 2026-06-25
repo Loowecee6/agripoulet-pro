@@ -45,7 +45,9 @@ export default defineConfig(() => {
             ],
           },
           workbox: {
-            globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+            globPatterns: ['**/*.{js,css,ico,png,svg,webp}'],
+            navigateFallback: '/index.html',
+            navigateFallbackDenylist: [/\/__\/auth/],
             runtimeCaching: [
               {
                 urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,

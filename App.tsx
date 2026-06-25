@@ -27,7 +27,7 @@ import { getUserRole } from './services/userService';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
-const APP_VERSION = 'v5';
+const APP_VERSION = 'v6';
 
 export default function App() {
   const { user, signOutUser } = useAuth();
@@ -39,25 +39,19 @@ export default function App() {
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [isForcingSync, setIsForcingSync] = useState(false);
 
-  // ── Vérification version : force le rechargement propre si le code a changé ──
+  // ── Vérification version : vide le cache local si le code a changé ──
   const [versionChecked, setVersionChecked] = useState(false);
   useEffect(() => {
     const cached = localStorage.getItem('app_version');
     if (cached !== APP_VERSION) {
-      (async () => {
-        // Vider le cache du service worker ET IndexedDB
-        if ('caches' in window) {
-          const keys = await caches.keys();
-          await Promise.all(keys.map(k => caches.delete(k)));
-        }
-        if ('serviceWorker' in navigator) {
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(registrations.map(r => r.unregister()));
-        }
-        indexedDB.deleteDatabase('agripoulet-pro').catch(() => {});
-        localStorage.setItem('app_version', APP_VERSION);
-        window.location.reload();
-      })();
+      // Vider IndexedDB (données mises en cache) et recharger
+      try {
+        const req = indexedDB.deleteDatabase('agripoulet-pro');
+        req.onsuccess = () => {};
+        req.onerror = () => {};
+      } catch (_) {}
+      localStorage.setItem('app_version', APP_VERSION);
+      setTimeout(() => window.location.reload(), 50);
     } else {
       setVersionChecked(true);
     }
