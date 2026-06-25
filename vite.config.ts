@@ -14,6 +14,7 @@ export default defineConfig(() => {
         VitePWA({
           registerType: 'autoUpdate',
           strategies: 'generateSW',
+          filename: 'sw-v2.js',
           includeAssets: ['favicon.svg'],
           manifest: {
             name: 'AgriPoulet Pro',

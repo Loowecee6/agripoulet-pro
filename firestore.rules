@@ -121,7 +121,9 @@ service cloud.firestore {
 
     // ── Données partagées (tous les utilisateurs authentifiés) ─────
     match /sharedData/{document} {
-      allow read, write: if isAuthenticated() && isSized();
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isSized();
+      allow delete: if false;
     }
 
     // Document utilisateur (profil + rôle)
