@@ -144,6 +144,8 @@ export interface Chicken {
   poids: number;
   prix: number;
   vendu: boolean;
+  isGroup?: boolean;
+  quantiteGroupe?: number;
 }
 
 export interface StockBatch {
@@ -192,6 +194,13 @@ export interface Payment {
   note?: string;
 }
 
+export interface FactureItemLine {
+  designation: string;
+  qte: number;
+  prixU: number;
+  poids: number;
+}
+
 export interface Sale {
   id: string;
   clientId: string;
@@ -203,6 +212,7 @@ export interface Sale {
   isPaid: boolean;
   dateVente: string;
   payments?: Payment[];
+  factureItems?: FactureItemLine[];
 }
 
 export type ActivityAction =

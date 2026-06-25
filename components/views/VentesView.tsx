@@ -1,12 +1,12 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useToast } from '../common/ToastContext';
 import { QuickAddGrid } from '../common/QuickAddGrid';
 import {
   Plus, ChevronRight, MinusCircle, CheckCircle2, Receipt,
-  Edit2, Trash2, DollarSign, History, FileDown
+  Edit2, Trash2, DollarSign, History, Download, Copy, Send
 } from 'lucide-react';
-import { AppData } from '../../types';
-import { generateInvoice } from '../../utils/invoicePDF';
+import { AppData, FactureItemLine } from '../../types';
+import { formatWhatsAppUrl } from '../../utils/whatsapp';
 import { formatDateShort, formatDateWithTime } from '../../utils/dateFormat';
 import { getRemainingBalance, getTotalPayments, isSalePaid } from '../../utils/creditHelpers';
 import { formatCurrency, formatNumber } from '../../utils/currency';
@@ -34,7 +34,9 @@ export const VentesView = ({ data, setData, onTabChange, permissions = [] }: Ven
     selectedBatchId, setSelectedBatchId,
     basket, setBasket,
     priceInput, setPriceInput,
+    qteVente, setQteVente,
     availableBatches,
+    selectedBatch,
     filteredSales,
     getSaleChickens,
     handleAddToBasket,
@@ -46,6 +48,207 @@ export const VentesView = ({ data, setData, onTabChange, permissions = [] }: Ven
     handleFullPayment,
     resetAddModal,
   } = useSalesActions({ data, setData, addToast });
+
+  const generateSaleReceiptBlob = useCallback(async (sale: Sale, clientNom: string, clientTel: string): Promise<Blob | null> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const rowHeight = 30;
+      const items = sale.factureItems || [];
+      const headerHeight = 220;
+      const footerHeight = 130;
+      const dynamicHeight = Math.max(1, items.length) * rowHeight;
+      const canvasWidth = 500;
+      const canvasHeight = headerHeight + dynamicHeight + footerHeight;
+
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(null); return; }
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(5, 5, canvasWidth - 10, canvasHeight - 10);
+
+      ctx.fillStyle = '#ea580c';
+      ctx.fillRect(5, 5, canvasWidth - 10, 15);
+
+      ctx.font = '36px "Inter", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🐔', canvasWidth / 2, 65);
+
+      ctx.font = 'bold 22px "Inter", sans-serif';
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText('AGRIPOULET PRO', canvasWidth / 2, 105);
+
+      ctx.font = 'italic 12px "Inter", sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Élevage & Vente de Poulets de Qualité', canvasWidth / 2, 125);
+
+      const drawDottedLine = (y: number) => {
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(25, y);
+        ctx.lineTo(canvasWidth - 25, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      };
+
+      drawDottedLine(140);
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#475569';
+      ctx.font = 'bold 11px "Inter", sans-serif';
+      ctx.fillText(`FACTURE N° : FAC-${new Date(sale.dateVente).toISOString().split('T')[0].replace(/-/g, '')}-${sale.id.slice(0, 4)}`, 25, 160);
+      ctx.fillText(`Date : ${new Date(sale.dateVente).toLocaleDateString('fr-FR')}`, 25, 178);
+
+      ctx.fillText(`Client : ${clientNom}`, 25, 196);
+      if (clientTel) {
+        ctx.fillText(`Tél : ${clientTel}`, 25, 214);
+      }
+      const nbPoulets = items.reduce((s, i) => s + i.qte, 0) || sale.pouletIds.length;
+      ctx.fillText(`Nb de poulets : ${nbPoulets}`, 25, clientTel ? 232 : 214);
+
+      const infoEnd = clientTel ? 232 : 214;
+      drawDottedLine(infoEnd + 18);
+
+      ctx.font = 'bold 11px "Inter", sans-serif';
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText('Désignation', 25, infoEnd + 40);
+      ctx.textAlign = 'right';
+      ctx.fillText('Prix (F)', 475, infoEnd + 40);
+
+      drawDottedLine(infoEnd + 52);
+
+      let currentY = infoEnd + 75;
+      ctx.font = 'medium 11px "Inter", sans-serif';
+      ctx.fillStyle = '#334155';
+
+      if (items.length > 0) {
+        items.forEach((item) => {
+          ctx.textAlign = 'left';
+          let name = item.designation || 'Poulet';
+          if (item.qte > 1) name += ` (x${item.qte})`;
+          if (name.length > 36) name = name.substring(0, 33) + '...';
+          ctx.fillText(name, 25, currentY);
+
+          ctx.textAlign = 'right';
+          ctx.font = 'bold 11px "Inter", sans-serif';
+          ctx.fillText(String(item.qte * item.prixU), 475, currentY);
+          ctx.font = 'medium 11px "Inter", sans-serif';
+          currentY += rowHeight;
+        });
+      } else {
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = 'italic 11px "Inter", sans-serif';
+        ctx.fillText('Aucun détail disponible', canvasWidth / 2, currentY + 10);
+        currentY += rowHeight;
+      }
+
+      drawDottedLine(currentY - 12);
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 14px "Inter", sans-serif';
+      ctx.fillText('TOTAL À PAYER', 25, currentY + 16);
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#ea580c';
+      ctx.font = '900 17px "Inter", sans-serif';
+      ctx.fillText(`${sale.total.toLocaleString('fr-FR')} F CFA`, 475, currentY + 18);
+
+      currentY += 45;
+      const bannerWidth = canvasWidth - 50;
+      const bannerHeight = 32;
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 11px "Inter", sans-serif';
+
+      if (sale.isCredit && !sale.isPaid) {
+        ctx.fillStyle = '#fef2f2';
+        ctx.fillRect(25, currentY, bannerWidth, bannerHeight);
+        ctx.strokeStyle = '#fca5a5';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(25, currentY, bannerWidth, bannerHeight);
+        ctx.fillStyle = '#b91c1c';
+        ctx.fillText(
+          `PAIEMENT DIFFÉRÉ — ÉCHÉANCE : ${sale.dueDate ? new Date(sale.dueDate).toLocaleDateString('fr-FR') : 'N/A'}`,
+          canvasWidth / 2, currentY + 20
+        );
+      } else {
+        ctx.fillStyle = '#f0fdf4';
+        ctx.fillRect(25, currentY, bannerWidth, bannerHeight);
+        ctx.strokeStyle = '#86efac';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(25, currentY, bannerWidth, bannerHeight);
+        ctx.fillStyle = '#15803d';
+        ctx.fillText('PAIEMENT COMPTANT (SOLDE)', canvasWidth / 2, currentY + 20);
+      }
+
+      currentY += bannerHeight + 25;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'italic 10px "Inter", sans-serif';
+      ctx.fillText('Merci pour votre confiance ! 🐔', canvasWidth / 2, currentY);
+      ctx.fillText('AgriPoulet Pro — Sénégal', canvasWidth / 2, currentY + 14);
+
+      canvas.toBlob((blob) => resolve(blob), 'image/png');
+    });
+  }, []);
+
+  const handleDownloadReceipt = useCallback(async (sale: Sale) => {
+    const client = data.clients.find(c => c.id === sale.clientId);
+    const blob = await generateSaleReceiptBlob(sale, sale.clientNom, client?.tel || '');
+    if (!blob) { addToast('Erreur de génération', 'error'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Facture_${sale.clientNom.replace(/\s+/g, '_')}_${new Date(sale.dateVente).toISOString().split('T')[0]}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    addToast('Reçu téléchargé !', 'success');
+  }, [data.clients, generateSaleReceiptBlob, addToast]);
+
+  const handleCopyReceipt = useCallback(async (sale: Sale) => {
+    const client = data.clients.find(c => c.id === sale.clientId);
+    const blob = await generateSaleReceiptBlob(sale, sale.clientNom, client?.tel || '');
+    if (!blob) { addToast('Erreur de génération', 'error'); return; }
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      addToast('Reçu copié ! Collez-le (Ctrl+V) sur WhatsApp.', 'success');
+    } catch {
+      addToast('Copie non supportée dans ce navigateur.', 'info');
+    }
+  }, [data.clients, generateSaleReceiptBlob, addToast]);
+
+  const handleShareSaleWhatsApp = useCallback(async (sale: Sale) => {
+    const client = data.clients.find(c => c.id === sale.clientId);
+    const tel = client?.tel || '';
+    const blob = await generateSaleReceiptBlob(sale, sale.clientNom, tel);
+    if (!blob) { addToast('Erreur de génération', 'error'); return; }
+    const items = sale.factureItems || [];
+    let text = `*AGRIPOULET PRO - FACTURE* 🐔\n---------------------------------\n`;
+    text += `*Client :* ${sale.clientNom}\n*Date :* ${new Date(sale.dateVente).toLocaleDateString('fr-FR')}\n`;
+    text += `*Statut :* ${sale.isCredit && !sale.isPaid ? 'Crédit' : 'Payé'}\n---------------------------------\n`;
+    items.forEach(item => {
+      text += `- ${item.designation} (x${item.qte}) : *${(item.qte * item.prixU).toLocaleString('fr-FR')} F*\n`;
+    });
+    text += `---------------------------------\n*TOTAL : ${sale.total.toLocaleString('fr-FR')} F CFA*\n\n`;
+    text += `Voir l'image jointe pour les détails. 🙏🐔`;
+
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    } catch { /* ignore */ }
+    const url = formatWhatsAppUrl(tel || '00000000', text);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    else addToast('Numéro invalide.', 'error');
+  }, [data.clients, generateSaleReceiptBlob, addToast]);
 
   return (
     <div className="space-y-6">
@@ -131,14 +334,30 @@ export const VentesView = ({ data, setData, onTabChange, permissions = [] }: Ven
               <option value="">Sélectionner le stock source</option>
               {availableBatches.map(b => (
                 <option key={b.id} value={b.id}>
-                  {b.nom} ({b.poulets.filter(p => !p.vendu).length} dispos)
+                  {b.nom} ({b.quantite && b.quantite > 0 ? b.quantite : b.poulets.filter(p => !p.vendu).length} dispos)
                 </option>
               ))}
             </select>
           </div>
           
+          {/* Quantité pour lots groupés */}
+          {selectedBatch?.quantite && selectedBatch.quantite > 0 && (
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Quantité à vendre</label>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setQteVente(Math.max(1, qteVente - 1))} className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700 font-bold text-lg flex items-center justify-center active:scale-90">-</button>
+                <input
+                  type="number" min="1" max={selectedBatch.quantite}
+                  value={qteVente}
+                  onChange={(e) => setQteVente(Math.min(selectedBatch.quantite, Math.max(1, parseInt(e.target.value) || 1)))}
+                  className="flex-1 p-3 border rounded-xl bg-gray-50 dark:bg-gray-800 text-center text-lg font-bold dark:text-white outline-none"
+                />
+                <button type="button" onClick={() => setQteVente(Math.min(selectedBatch.quantite, qteVente + 1))} className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700 font-bold text-lg flex items-center justify-center active:scale-90">+</button>
+              </div>
+            </div>
+          )}
           <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-3xl space-y-3 border border-orange-100 dark:border-orange-800/50 shadow-sm">
-            <label className="text-[10px] font-black text-orange-400 dark:text-orange-300 uppercase ml-1">Ajouter un poulet (Saisie Prix)</label>
+            <label className="text-[10px] font-black text-orange-400 dark:text-orange-300 uppercase ml-1">{selectedBatch?.quantite && selectedBatch.quantite > 0 ? 'Vendre au prix unitaire (F)' : 'Ajouter un poulet (Saisie Prix)'}</label>
             <div className="flex gap-2">
               <QuickAddGrid
                 options={[3500, 4000, 4500, 5000]}
@@ -160,9 +379,9 @@ export const VentesView = ({ data, setData, onTabChange, permissions = [] }: Ven
               {basket.length === 0 && <p className="text-center text-xs text-gray-400 dark:text-gray-500 py-6 italic">Aucun poulet sélectionné</p>}
               {basket.map(p => (
                 <div key={p.id} className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 text-xs shadow-sm">
-                  <span className="px-2 py-1 rounded-lg text-[10px] font-black tracking-wider bg-orange-100 text-orange-700">{p.numero}</span>
+                  <span className="px-2 py-1 rounded-lg text-[10px] font-black tracking-wider bg-orange-100 text-orange-700">{p.isGroup ? `x${p.quantiteGroupe}` : p.numero}</span>
                   <div className="flex-1">
-                    <div className="text-[9px] text-gray-400">{p.poids} kg</div>
+                    <div className="text-[9px] text-gray-400">{p.isGroup ? `${p.quantiteGroupe} poulet(s)` : `${p.poids} kg`}</div>
                   </div>
                   <div className="font-black text-orange-600 text-sm">{formatCurrency(p.prix)}</div>
                   <button type="button" onClick={() => handleRemoveFromBasket(p.id)} className="text-gray-300 hover:text-red-500 ml-1">
@@ -220,20 +439,47 @@ export const VentesView = ({ data, setData, onTabChange, permissions = [] }: Ven
                </div>
 
                <div className="space-y-3 mb-6">
-                 <div className="grid grid-cols-3 text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">
-                   <span>Réf / Matricule</span>
-                   <span className="text-center">Poids</span>
-                   <span className="text-right">Prix</span>
-                 </div>
-                 <div className="h-px bg-gray-100" />
-                  {getSaleChickens(selectedSale.pouletIds).map(p => (
-                    <div key={p.id} className="grid grid-cols-3 items-center px-1 text-sm">
-                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-black tracking-wider bg-orange-100 text-orange-700 inline-block w-fit">{p.numero}</span>
-                      <span className="text-center text-gray-500">{p.poids} kg</span>
-                      <span className="text-right font-black text-orange-600">{formatCurrency(p.prix)}</span>
-                    </div>
-                  ))}
-               </div>
+                  {selectedSale.factureItems ? (
+                    <>
+                      <div className="grid grid-cols-3 text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">
+                        <span>Désignation</span>
+                        <span className="text-center">Qté</span>
+                        <span className="text-right">Prix</span>
+                      </div>
+                      <div className="h-px bg-gray-100" />
+                      {selectedSale.factureItems.map((item, i) => (
+                        <div key={i} className="grid grid-cols-3 items-center px-1 text-sm">
+                          <span className="text-gray-700">{item.designation}</span>
+                          <span className="text-center text-gray-500">x{item.qte}</span>
+                          <span className="text-right font-black text-orange-600">{formatCurrency(item.qte * item.prixU)}</span>
+                        </div>
+                      ))}
+                      <div className="mt-2 pt-2 border-t border-dashed border-gray-200 grid grid-cols-3 text-xs px-1">
+                        <span className="text-gray-500">Nbre de poulets</span>
+                        <span className="text-center text-gray-500"></span>
+                        <span className="text-right font-black text-orange-600">{selectedSale.factureItems.reduce((s, i) => s + i.qte, 0)}</span>
+                      </div>
+                    </>
+                  ) : selectedSale.pouletIds.length > 0 ? (
+                    <>
+                      <div className="grid grid-cols-3 text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">
+                        <span>Réf / Matricule</span>
+                        <span className="text-center">Poids</span>
+                        <span className="text-right">Prix</span>
+                      </div>
+                      <div className="h-px bg-gray-100" />
+                      {getSaleChickens(selectedSale.pouletIds).map(p => (
+                        <div key={p.id} className="grid grid-cols-3 items-center px-1 text-sm">
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-black tracking-wider bg-orange-100 text-orange-700 inline-block w-fit">{p.numero}</span>
+                          <span className="text-center text-gray-500">{p.poids} kg</span>
+                          <span className="text-right font-black text-orange-600">{formatCurrency(p.prix)}</span>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-400 text-center py-4 italic">Détails indisponibles pour cette ancienne facture</p>
+                  )}
+                </div>
 
                <div className="h-px bg-gray-100 mb-4" />
 
@@ -255,27 +501,6 @@ export const VentesView = ({ data, setData, onTabChange, permissions = [] }: Ven
             </div>
 
             <div className="flex flex-col gap-3">
-              <div className="flex gap-2">
-                <button
-                  onClick={async () => {
-                    try {
-                      const chickens = getSaleChickens(selectedSale.pouletIds).map(p => ({
-                        numero: p.numero,
-                        poids: p.poids,
-                        prix: p.prix,
-                      }));
-                      await generateInvoice(selectedSale, selectedSale.clientNom, chickens);
-                      addToast('Facture téléchargée !', 'success');
-                    } catch (err) {
-                      addToast('Erreur lors de la génération de la facture', 'error');
-                      console.error(err);
-                    }
-                  }}
-                  className="flex-1 bg-orange-600 text-white p-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 active:scale-95 transition-transform flex items-center justify-center gap-2"
-                >
-                  <FileDown className="w-5 h-5" /> Télécharger PDF
-                </button>
-              </div>
 
               {/* Payment History Section */}
               {selectedSale.isCredit && (selectedSale.payments || []).length > 0 && (
@@ -362,6 +587,31 @@ export const VentesView = ({ data, setData, onTabChange, permissions = [] }: Ven
                 </div>
               )}
               
+               {/* Share / Export Actions */}
+               <div className="grid grid-cols-3 gap-2">
+                 <button
+                   onClick={() => handleDownloadReceipt(selectedSale)}
+                   className="p-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 rounded-2xl font-bold text-[10px] flex flex-col items-center justify-center gap-1 active:scale-95 transition-all dark:text-white"
+                 >
+                   <Download className="w-4 h-4 text-gray-600" />
+                   Télécharger
+                 </button>
+                 <button
+                   onClick={() => handleCopyReceipt(selectedSale)}
+                   className="p-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 rounded-2xl font-bold text-[10px] flex flex-col items-center justify-center gap-1 active:scale-95 transition-all dark:text-white"
+                 >
+                   <Copy className="w-4 h-4 text-gray-600" />
+                   Copier
+                 </button>
+                 <button
+                   onClick={() => handleShareSaleWhatsApp(selectedSale)}
+                   className="p-3 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold text-[10px] flex flex-col items-center justify-center gap-1 active:scale-95 transition-all"
+                 >
+                   <Send className="w-4 h-4" />
+                   WhatsApp
+                 </button>
+               </div>
+
                <button 
                  onClick={() => setSelectedSale(null)}
                  className="w-full bg-gray-100 text-gray-500 p-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-transform"

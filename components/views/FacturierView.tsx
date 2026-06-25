@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { ArrowLeft, Plus, Trash2, Download, Copy, Send, Receipt, User, Phone, Calendar, Check, AlertCircle } from 'lucide-react';
 import { AppData, Client, Sale } from '../../types';
 import { formatWhatsAppUrl } from '../../utils/whatsapp';
+import { deductStockByQuantity } from '../../domain/sales';
 import { useToast } from '../common/ToastContext';
 
 interface FacturierViewProps {
@@ -317,31 +318,42 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
       };
     }
 
-    // 2. Create sale entry
+    // 2. Deduire du stock la quantite totale vendue
+    const totalQte = items.reduce((s, i) => s + i.qte, 0);
+    const { updated: updatedBatches, venduIds } = deductStockByQuantity(data.stockBatches, totalQte);
+
+      // 3. Create sale entry
     const newSale: Sale = {
       id: crypto.randomUUID(),
       clientId: client?.id || 'inconnu',
       clientNom: clientNom.trim() || 'Client de passage',
-      pouletIds: [],
+      pouletIds: venduIds,
       total: totalFacture,
       isCredit: isDeferred,
       dueDate: isDeferred ? dateEcheance : undefined,
       isPaid: !isDeferred,
       dateVente: new Date(dateFacture).toISOString(),
+      factureItems: items.map(i => ({
+        designation: i.designation,
+        qte: i.qte,
+        prixU: i.prixU,
+        poids: i.poids,
+      })),
     };
 
-    // 3. Update AppData
+    // 4. Update AppData
     const updatedClients = client && !data.clients.find(c => c.id === client.id)
       ? [...data.clients, client]
       : data.clients;
-    setData({ ...data, clients: updatedClients, sales: [newSale, ...data.sales] });
+    setData({ ...data, clients: updatedClients, stockBatches: updatedBatches, sales: [newSale, ...data.sales] });
 
-    addToast('Vente enregistrée avec succès !', 'success');
+    addToast(`Vente enregistrée ! Stock mis à jour (-${totalQte} poulets)`, 'success');
     return true;
   }, [items, totalFacture, clientNom, clientTel, isDeferred, dateEcheance, dateFacture, data, setData, addToast]);
 
   const handleShareWhatsApp = () => {
-    handleSaveVente();
+    const ok = handleSaveVente();
+    if (!ok) return;
     const cleanPhone = clientTel.trim();
     
     // Construct recap text

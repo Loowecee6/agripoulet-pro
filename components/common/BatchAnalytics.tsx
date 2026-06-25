@@ -92,7 +92,7 @@ export function BatchAnalytics({ batches }: BatchAnalyticsProps) {
         ? batch.suiviQuotidien[batch.suiviQuotidien.length - 1].poidsReel
         : 0;
       const totalConsoKg = batch.suiviQuotidien.reduce((a, r) => a + r.quantite, 0);
-      const survivingBirds = batch.nbPoussinsInitial - totalMortality;
+      const survivingBirds = batch.nbPoussinsInitial - totalMortality - (batch.nbAbattus || 0);
       const poidsTotalKg = (lastWeight * survivingBirds) / 1000;
       const ic = poidsTotalKg > 0 ? totalConsoKg / poidsTotalKg : 0;
       const duration = batch.suiviQuotidien.length > 0

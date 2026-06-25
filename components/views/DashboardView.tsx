@@ -47,13 +47,13 @@ export const DashboardView = ({ data, onTabChange, permissions = [] }: Dashboard
       .filter(b => b.statut === 'active')
       .reduce((acc, batch) => {
         const totalMorts = batch.suiviQuotidien.reduce((s, r) => s + r.mort, 0);
-        return acc + (batch.nbPoussinsInitial - totalMorts);
+        return acc + (batch.nbPoussinsInitial - totalMorts - (batch.nbAbattus || 0));
       }, 0);
 
     // Poulets en stock non vendus
     const stockAvailable = data.stockBatches
       .filter(sb => sb.isFinalized)
-      .reduce((acc, sb) => acc + sb.poulets.filter(p => !p.vendu).length, 0);
+      .reduce((acc, sb) => acc + (sb.quantite || sb.poulets.filter(p => !p.vendu).length), 0);
 
     // Crédits en cours (solde restant après paiements partiels)
     const creditsEnCours = activeSales
@@ -185,7 +185,7 @@ export const DashboardView = ({ data, onTabChange, permissions = [] }: Dashboard
     // Stock faible
     const stockAvailable = data.stockBatches
       .filter(sb => sb.isFinalized)
-      .reduce((acc, sb) => acc + sb.poulets.filter(p => !p.vendu).length, 0);
+      .reduce((acc, sb) => acc + (sb.quantite || sb.poulets.filter(p => !p.vendu).length), 0);
     if (stockAvailable === 0 && data.productionBatches.some(b => b.statut === 'active')) {
       list.push({
         type: 'info',

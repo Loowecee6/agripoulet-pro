@@ -15,6 +15,7 @@ import {
   validateCredit,
   markChickensAsSold,
   markChickensAsUnsold,
+  deductStockByQuantity,
   processPayment,
 } from '../domain/sales';
 
@@ -38,6 +39,7 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
   const [selectedBatchId, setSelectedBatchId] = useState<string>('');
   const [basket, setBasket] = useState<Chicken[]>([]);
   const [priceInput, setPriceInput] = useState<string>('');
+  const [qteVente, setQteVente] = useState<number>(1);
 
   // IDs des poulets réservés
   const reservedPouletIds = useMemo(() => getReservedPouletIds(data.reservations), [data.reservations]);
@@ -46,6 +48,8 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
     () => getAvailableBatches(data.stockBatches, reservedPouletIds),
     [data.stockBatches, reservedPouletIds]
   );
+
+  const selectedBatch = data.stockBatches.find(b => b.id === selectedBatchId);
 
   const filteredSales = data.sales.filter(s =>
     !('deletedAt' in s) && s.clientNom.toLowerCase().includes(search.toLowerCase())
@@ -59,6 +63,27 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
     if (!targetBatch) return;
 
     const targetPrice = Number(priceInput);
+
+    // Lot groupé (quantite)
+    if (targetBatch.quantite && targetBatch.quantite > 0) {
+      const qte = Math.min(qteVente, targetBatch.quantite);
+      if (qte <= 0) return addToast('Stock insuffisant.', 'error');
+      const virtual: Chicken = {
+        id: `${targetBatch.id}-groupe-${Date.now()}`,
+        numero: `${targetBatch.nom} x${qte}`,
+        poids: 0,
+        prix: targetPrice * qte,
+        vendu: false,
+        isGroup: true,
+        quantiteGroupe: qte,
+      };
+      setBasket(prev => [...prev, virtual]);
+      setPriceInput('');
+      addToast(`${qte} poulet(s) ajouté(s) au panier`, 'success');
+      return;
+    }
+
+    // Poulets individuels
     const foundChicken = targetBatch.poulets.find(
       p => !p.vendu && !reservedPouletIds.has(p.id) && p.prix === targetPrice && !basket.some(bp => bp.id === p.id)
     );
@@ -70,7 +95,7 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
     } else {
       addToast(`Aucun poulet disponible à ${targetPrice} Frs dans ce lot.`, 'error');
     }
-  }, [selectedBatchId, priceInput, data.stockBatches, reservedPouletIds, basket, addToast]);
+  }, [selectedBatchId, priceInput, qteVente, data.stockBatches, reservedPouletIds, basket, addToast]);
 
   const handleRemoveFromBasket = useCallback((id: string) => {
     setBasket(prev => prev.filter(p => p.id !== id));
@@ -86,7 +111,9 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
       const client = data.clients.find(c => c.id === clientId);
       if (!client) return addToast('Veuillez sélectionner un client.', 'error');
 
-      const basketIds = basket.map(p => p.id);
+      // Calculer la quantité totale (individuels + groupes)
+      const totalQte = basket.reduce((acc, p) => acc + ((p as any).quantiteGroupe || 1), 0);
+      const basketIds = basket.filter(p => !(p as any).isGroup).map(p => p.id);
       const total = basket.reduce((acc, p) => acc + p.prix, 0);
       const isCredit = f.get('isCredit') === 'on';
       const dueDateRaw = f.get('dueDate') as string;
@@ -96,21 +123,40 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
         if (error) return addToast(error, 'error');
       }
 
+      const { updated: updatedStock, venduIds } = deductStockByQuantity(data.stockBatches, totalQte);
+
+      const factureItems = basket.map(p => {
+        if ((p as any).isGroup) {
+          return {
+            designation: 'Poulet de chair',
+            qte: (p as any).quantiteGroupe || 1,
+            prixU: Math.round(p.prix / ((p as any).quantiteGroupe || 1)),
+            poids: 0,
+          };
+        }
+        return {
+          designation: 'Poulet de chair',
+          qte: 1,
+          prixU: p.prix,
+          poids: p.poids,
+        };
+      });
+
       const newSale = createSale({
         clientId: client.id,
         clientNom: client.nom,
-        pouletIds: basketIds,
+        pouletIds: [...new Set([...basketIds, ...venduIds])],
         total,
         isCredit,
         dueDateRaw,
+        factureItems,
       });
-
-      const updatedStock = markChickensAsSold(data.stockBatches, basketIds);
 
       setData({ ...data, stockBatches: updatedStock, sales: [newSale, ...data.sales] });
       setIsAddModalOpen(false);
       setBasket([]);
       setSelectedBatchId('');
+      setQteVente(1);
       addToast('Vente enregistrée avec succès', 'success');
     },
     [basket, data, setData, addToast]
@@ -265,6 +311,7 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
     setIsAddModalOpen(false);
     setBasket([]);
     setSelectedBatchId('');
+    setQteVente(1);
   }, []);
 
   return {
@@ -287,9 +334,12 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
     setBasket,
     priceInput,
     setPriceInput,
+    qteVente,
+    setQteVente,
     // Données dérivées
     reservedPouletIds,
     availableBatches,
+    selectedBatch,
     filteredSales,
     getSaleChickens: (pouletIds: string[]) => getSaleChickens(data.stockBatches, pouletIds),
     // Handlers

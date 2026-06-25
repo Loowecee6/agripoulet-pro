@@ -18,13 +18,16 @@ export function getReservedPouletIds(reservations: Reservation[]): Set<string> {
 }
 
 /**
- * Filtre les lots de stock disponibles (avec des poulets non vendus et non réservés)
+ * Filtre les lots de stock disponibles (avec des poulets non vendus / quantite > 0 et non réservés)
  */
 export function getAvailableBatches(
   stockBatches: StockBatch[],
   reservedPouletIds: Set<string>
 ): StockBatch[] {
-  return stockBatches.filter(b => b.poulets.some(p => !p.vendu && !reservedPouletIds.has(p.id)));
+  return stockBatches.filter(b =>
+    (b.quantite && b.quantite > 0) ||
+    b.poulets.some(p => !p.vendu && !reservedPouletIds.has(p.id))
+  );
 }
 
 /**
@@ -50,6 +53,7 @@ export function createSale(params: {
   total: number;
   isCredit: boolean;
   dueDateRaw?: string;
+  factureItems?: { designation: string; qte: number; prixU: number; poids: number }[];
 }): Sale {
   return {
     id: crypto.randomUUID(),
@@ -61,6 +65,7 @@ export function createSale(params: {
     dueDate: params.isCredit && params.dueDateRaw ? params.dueDateRaw : undefined,
     isPaid: !params.isCredit,
     dateVente: new Date().toISOString(),
+    factureItems: params.factureItems,
   };
 }
 
@@ -93,6 +98,52 @@ export function markChickensAsSold(
     ),
   }));
 }
+
+/**
+ * Déduit une quantité de poulets du stock, en priorisant :
+ * 1. Les lots groupés (quantite), en décrémentant le champ quantite
+ * 2. Les poulets individuels, en marquant les premiers non vendus comme vendu
+ * Retourne les lots mis à jour + les IDs des poulets vendus
+ */
+export function deductStockByQuantity(
+  stockBatches: StockBatch[],
+  quantite: number
+): { updated: StockBatch[]; venduIds: string[] } {
+  const venduIds: string[] = [];
+  let restant = quantite;
+
+  const updated = stockBatches.map(b => {
+    if (restant <= 0) return b;
+
+    // 1. Lots groupés : décrémenter quantite
+    if (b.quantite && b.quantite > 0) {
+      const pris = Math.min(restant, b.quantite);
+      restant -= pris;
+      return { ...b, quantite: b.quantite - pris };
+    }
+
+    // 2. Poulets individuels : marquer comme vendu
+    const nonVendus = b.poulets.filter(p => !p.vendu).length;
+    if (nonVendus <= 0) return b;
+
+    const aPrendre = Math.min(restant, nonVendus);
+    let compteur = 0;
+    const nouveauPoulets = b.poulets.map(p => {
+      if (compteur >= aPrendre) return p;
+      if (p.vendu) return p;
+      compteur++;
+      restant--;
+      venduIds.push(p.id);
+      return { ...p, vendu: true };
+    });
+
+    return { ...b, poulets: nouveauPoulets };
+  });
+
+  return { updated, venduIds };
+}
+
+
 
 /**
  * Remet les poulets en stock (annulation de vente)
