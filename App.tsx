@@ -195,7 +195,7 @@ export default function App() {
             <RapportView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
           )}
           {data && activeTab === 'facturier' && (
-            <FacturierView data={data} onBack={() => setActiveTab('dashboard')} darkMode={data.settings.darkMode} />
+            <FacturierView data={data} setData={updateData} onBack={() => setActiveTab('dashboard')} darkMode={data.settings.darkMode} />
           )}
         </main>
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />

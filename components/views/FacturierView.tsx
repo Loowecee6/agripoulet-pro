@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { ArrowLeft, Plus, Trash2, Download, Copy, Send, Receipt, User, Phone, Calendar, Check, AlertCircle } from 'lucide-react';
-import { AppData, Client } from '../../types';
+import { AppData, Client, Sale } from '../../types';
 import { formatWhatsAppUrl } from '../../utils/whatsapp';
 import { useToast } from '../common/ToastContext';
 
 interface FacturierViewProps {
   data: AppData;
+  setData: (d: AppData) => void;
   onBack: () => void;
   darkMode?: boolean;
 }
@@ -17,7 +18,7 @@ interface FactureItem {
   prixU: number;
 }
 
-export const FacturierView = ({ data, onBack, darkMode }: FacturierViewProps) => {
+export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierViewProps) => {
   const { addToast } = useToast();
 
   // --- Client State ---
@@ -304,7 +305,49 @@ export const FacturierView = ({ data, onBack, darkMode }: FacturierViewProps) =>
     }
   };
 
+  const handleSaveVente = useCallback(() => {
+    if (items.length === 0 || totalFacture <= 0) {
+      addToast('Facture vide. Ajoutez au moins une ligne.', 'warning');
+      return false;
+    }
+
+    // 1. Find or create client
+    const telDigits = clientTel.replace(/\D/g, '');
+    let client = data.clients.find(c => c.tel.replace(/\D/g, '') === telDigits) || null;
+    if (!client && clientNom.trim()) {
+      client = {
+        id: crypto.randomUUID(),
+        nom: clientNom.trim(),
+        tel: clientTel.trim(),
+        adresse: '',
+      };
+    }
+
+    // 2. Create sale entry
+    const newSale: Sale = {
+      id: crypto.randomUUID(),
+      clientId: client?.id || 'inconnu',
+      clientNom: clientNom.trim() || 'Client de passage',
+      pouletIds: [],
+      total: totalFacture,
+      isCredit: isDeferred,
+      dueDate: isDeferred ? dateEcheance : undefined,
+      isPaid: !isDeferred,
+      dateVente: new Date(dateFacture).toISOString(),
+    };
+
+    // 3. Update AppData
+    const updatedClients = client && !data.clients.find(c => c.id === client.id)
+      ? [...data.clients, client]
+      : data.clients;
+    setData({ ...data, clients: updatedClients, sales: [newSale, ...data.sales] });
+
+    addToast('Vente enregistrée avec succès !', 'success');
+    return true;
+  }, [items, totalFacture, clientNom, clientTel, isDeferred, dateEcheance, dateFacture, data, setData, addToast]);
+
   const handleShareWhatsApp = () => {
+    handleSaveVente();
     const cleanPhone = clientTel.trim();
     
     // Construct recap text
@@ -660,6 +703,14 @@ export const FacturierView = ({ data, onBack, darkMode }: FacturierViewProps) =>
             >
               <Copy className="w-5 h-5 text-gray-600 dark:text-gray-300" />
               Copier le Reçu
+            </button>
+
+            <button 
+              onClick={handleSaveVente}
+              className="col-span-2 p-5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-100 dark:shadow-none active:scale-95 transition-all"
+            >
+              <Check className="w-4 h-4 shrink-0" />
+              Enregistrer la vente
             </button>
 
             <button 
