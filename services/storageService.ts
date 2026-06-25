@@ -7,109 +7,13 @@ import { doc, setDoc, getDoc, collection, addDoc, getDocs, query, orderBy, limit
 import { offlineService } from './offlineService';
 
 const getDefaultData = (): AppData => ({
-  productionBatches: [{
-    id: 'prod-1',
-    nom: 'Bande Test A',
-    dateMisePlace: '2026-05-01',
-    nbPoussinsInitial: 100,
-    prixAchatPoussin: 500,
-    suiviQuotidien: [
-      { date: '2026-05-01', jourDeBande: 1, mort: 2, conso: 1000, quantite: 0.5, poidsReel: 55, sampleCount: 10, sampleTotalWeight: 550 },
-      { date: '2026-05-05', jourDeBande: 5, mort: 1, conso: 3000, quantite: 1.5, poidsReel: 138, sampleCount: 10, sampleTotalWeight: 1380 },
-      { date: '2026-05-10', jourDeBande: 10, mort: 0, conso: 5000, quantite: 3.0, poidsReel: 330, sampleCount: 10, sampleTotalWeight: 3300 },
-      { date: '2026-05-15', jourDeBande: 15, mort: 1, conso: 8000, quantite: 4.5, poidsReel: 570, sampleCount: 10, sampleTotalWeight: 5700 },
-      { date: '2026-05-21', jourDeBande: 21, mort: 0, conso: 10000, quantite: 6.0, poidsReel: 900, sampleCount: 10, sampleTotalWeight: 9000 },
-    ],
-    depenses: [],
-    vaccinations: [],
-    statut: 'active',
-  }],
-  stockBatches: [{
-    id: 'stock-1',
-    typeOrigine: 'PR',
-    lettre: 'A',
-    nom: 'Stock A',
-    prixKg: 2000,
-    coutInitial: 50000,
-    poulets: [
-      { id: 'p1', numero: 'A001', poids: 2.5, prix: 4000, vendu: true },
-      { id: 'p2', numero: 'A002', poids: 2.8, prix: 4500, vendu: true },
-      { id: 'p3', numero: 'A003', poids: 2.3, prix: 3500, vendu: true },
-      { id: 'p4', numero: 'A004', poids: 2.6, prix: 4000, vendu: true },
-      { id: 'p5', numero: 'A005', poids: 2.4, prix: 4200, vendu: false },
-      { id: 'p6', numero: 'A006', poids: 2.7, prix: 4500, vendu: false },
-      { id: 'p7', numero: 'A007', poids: 2.2, prix: 3800, vendu: false },
-    ],
-    isFinalized: true,
-  }],
-  clients: [
-    { id: 'client-1', nom: 'Kouamé Jean', adresse: 'Abidjan Cocody', tel: '0102030405' },
-    { id: 'client-2', nom: 'Diallo Fatou', adresse: 'Abidjan Treichville', tel: '0504030201' },
-  ],
-  reservations: [
-    {
-      id: 'res-1',
-      clientId: 'client-1',
-      clientNom: 'Kouamé Jean',
-      pouletIds: ['p5'],
-      dateReserve: '2026-05-28',
-      statut: 'confirmed',
-      notes: 'Pour une fête de famille',
-      createdAt: '2026-05-21T10:00:00.000Z',
-      acompte: 2000,
-    },
-    {
-      id: 'res-2',
-      clientId: 'client-2',
-      clientNom: 'Diallo Fatou',
-      pouletIds: ['p6', 'p7'],
-      dateReserve: '2026-06-01',
-      statut: 'pending',
-      createdAt: '2026-05-21T16:00:00.000Z',
-    },
-  ],
-  sales: [
-    {
-      id: 'sale-1',
-      clientId: 'client-1',
-      clientNom: 'Kouamé Jean',
-      pouletIds: ['p1', 'p2'],
-      total: 8500,
-      isCredit: true,
-      dueDate: '2026-05-16', // 5j de retard pour tester les alertes
-      isPaid: false,
-      dateVente: '2026-05-21T10:00:00.000Z',
-      payments: [
-        { id: 'pay-1', montant: 3000, date: '2026-05-21T10:30:00.000Z', methode: 'especes', note: 'Avance' },
-        { id: 'pay-2', montant: 2000, date: '2026-05-28T14:00:00.000Z', methode: 'orange_money', note: 'Deuxième versement' },
-      ],
-    },
-    {
-      id: 'sale-2',
-      clientId: 'client-1',
-      clientNom: 'Kouamé Jean',
-      pouletIds: ['p3'],
-      total: 4000,
-      isCredit: true,
-      dueDate: '2026-05-23', // Dans 2j pour tester les échéances proches
-      isPaid: false,
-      dateVente: '2026-05-21T16:00:00.000Z',
-    },
-    {
-      id: 'sale-3',
-      clientId: 'client-2',
-      clientNom: 'Diallo Fatou',
-      pouletIds: ['p4'],
-      total: 4000,
-      isCredit: false,
-      isPaid: true,
-      dateVente: '2026-05-20T15:00:00.000Z',
-    },
-  ],
+  productionBatches: [],
+  stockBatches: [],
+  clients: [],
+  reservations: [],
+  sales: [],
   settings: {
-    // Le hash ci-dessous correspond à 'admin' via SHA-256.
-    // Changez-le dans l'onglet Bilan après la première connexion.
-    adminPasswordHash: '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918',
+    adminPasswordHash: '',
     notifications: {
       enabled: true,
       vaccinationReminders: true,
