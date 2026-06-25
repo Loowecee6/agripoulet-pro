@@ -453,18 +453,10 @@ export const FacturierView = ({ data, onBack, darkMode }: FacturierViewProps) =>
         </div>
 
         {/* SECTION 2 : ITEMS LIST */}
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-gray-50 dark:border-gray-700">
-            <div className="flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-orange-500" />
-              <h3 className="font-bold text-sm">Lignes de la facture</h3>
-            </div>
-            <button 
-              onClick={handleAddItem}
-              className="text-xs font-black uppercase tracking-wider text-orange-600 bg-orange-50 dark:bg-orange-950/40 px-3 py-1.5 rounded-xl hover:bg-orange-100 transition-colors flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" /> Ligne
-            </button>
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
+          <div className="flex items-center gap-2 pb-2 border-b border-gray-50 dark:border-gray-700 mb-4">
+            <Receipt className="w-5 h-5 text-orange-500" />
+            <h3 className="font-bold text-sm">Lignes de la facture</h3>
           </div>
 
           <div className="space-y-3">
@@ -564,6 +556,13 @@ export const FacturierView = ({ data, onBack, darkMode }: FacturierViewProps) =>
               </div>
             ))}
           </div>
+
+          <button 
+            onClick={handleAddItem}
+            className="mt-4 w-full text-sm font-black uppercase tracking-wider text-orange-600 bg-orange-50 dark:bg-orange-950/40 py-4 rounded-2xl border-2 border-dashed border-orange-200 dark:border-orange-900/50 hover:bg-orange-100 dark:hover:bg-orange-950/60 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+          >
+            <Plus className="w-5 h-5" /> Ajouter une ligne
+          </button>
           <div ref={itemsEndRef} />
         </div>
 
