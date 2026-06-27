@@ -1,11 +1,11 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { useToast } from '../common/ToastContext';
-import { QuickAddGrid } from '../common/QuickAddGrid';
 import {
-  Plus, ChevronRight, MinusCircle, CheckCircle2, Receipt,
-  Edit2, Trash2, DollarSign, History, Download, Copy, Send
+  Plus, ChevronRight, CheckCircle2, Receipt,
+  Edit2, Trash2, DollarSign, History, Download, Copy, Send,
+  User, AlertCircle
 } from 'lucide-react';
-import { AppData, FactureItemLine } from '../../types';
+import { AppData, Sale } from '../../types';
 import { formatWhatsAppUrl } from '../../utils/whatsapp';
 import { formatDateShort, formatDateWithTime } from '../../utils/dateFormat';
 import { getRemainingBalance, getTotalPayments, isSalePaid } from '../../utils/creditHelpers';
@@ -13,6 +13,7 @@ import { formatCurrency, formatNumber } from '../../utils/currency';
 import { Modal } from '../common/Modal';
 import { SearchBar } from '../common/SearchBar';
 import { useSalesActions } from '../../hooks/useSalesActions';
+import { deductStockByQuantity, validateCredit } from '../../domain/sales';
 
 interface VentesViewProps {
   data: AppData;
@@ -46,8 +47,149 @@ export const VentesView = ({ data, setData, onTabChange, permissions = [] }: Ven
     handleAddPayment,
     handleEditSale,
     handleFullPayment,
-    resetAddModal,
   } = useSalesActions({ data, setData, addToast });
+
+  // ── État du formulaire Facturier-style ──
+  interface FactureItem {
+    id: string;
+    designation: string;
+    qte: number;
+    prixU: number;
+    poids: number;
+  }
+
+  const [items, setItems] = useState<FactureItem[]>([
+    { id: '1', designation: 'Poulet de chair', qte: 1, prixU: 4000, poids: 1.5 }
+  ]);
+  const [activeItemIndex, setActiveItemIndex] = useState(0);
+  const [clientNom, setClientNom] = useState('');
+  const [clientTel, setClientTel] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [dateFacture, setDateFacture] = useState(new Date().toISOString().split('T')[0]);
+  const [isDeferred, setIsDeferred] = useState(false);
+  const [dateEcheance, setDateEcheance] = useState(new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
+  const isSubmittingSaleRef = useRef(false);
+
+  const QUICK_PRICES = [3500, 4000, 4500, 5000];
+
+  // ── Auto-fill client ──
+  useEffect(() => {
+    if (selectedClientId) {
+      const client = data.clients.find(c => c.id === selectedClientId);
+      if (client) {
+        setClientNom(client.nom);
+        setClientTel(client.tel);
+      }
+    }
+  }, [selectedClientId, data.clients]);
+
+  // ── Handlers items ──
+  const handleAddItem = useCallback(() => {
+    const newId = String(Date.now() + Math.random());
+    setItems(prev => [...prev, { id: newId, designation: 'Poulet de chair', qte: 1, prixU: 4000, poids: 1.5 }]);
+    setActiveItemIndex(prev => prev + 1);
+  }, []);
+
+  const handleRemoveItem = useCallback((id: string) => {
+    if (items.length === 1) {
+      addToast('La facture doit contenir au moins une ligne.', 'warning');
+      return;
+    }
+    setItems(prev => prev.filter(item => item.id !== id));
+    setActiveItemIndex(0);
+  }, [items.length, addToast]);
+
+  const handleUpdateItem = useCallback((index: number, key: keyof FactureItem, value: any) => {
+    setItems(prev => prev.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
+  }, []);
+
+  const resetItemsForm = useCallback(() => {
+    setItems([{ id: '1', designation: 'Poulet de chair', qte: 1, prixU: 4000, poids: 1.5 }]);
+    setActiveItemIndex(0);
+    setSelectedClientId('');
+    setClientNom('');
+    setClientTel('');
+    setDateFacture(new Date().toISOString().split('T')[0]);
+    setIsDeferred(false);
+    setDateEcheance(new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
+  }, []);
+
+  const handleCloseAddModal = useCallback(() => {
+    setIsAddModalOpen(false);
+    resetItemsForm();
+  }, [setIsAddModalOpen, resetItemsForm]);
+
+  const totalFacture = React.useMemo(() => {
+    return items.reduce((sum, item) => sum + item.qte * item.prixU, 0);
+  }, [items]);
+
+  const totalQte = React.useMemo(() => {
+    return items.reduce((sum, item) => sum + item.qte, 0);
+  }, [items]);
+
+  // ── Submit handler (Facturier-style) ──
+  const handleSubmitSale = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSubmittingSaleRef.current) return;
+
+    let client = selectedClientId ? data.clients.find(c => c.id === selectedClientId) : null;
+    if (!client && clientNom.trim()) {
+      client = { id: crypto.randomUUID(), nom: clientNom.trim(), tel: clientTel.trim(), adresse: '' };
+    }
+    if (!client) {
+      addToast('Veuillez sélectionner ou saisir un client.', 'error');
+      return;
+    }
+
+    if (totalQte <= 0 || totalFacture <= 0) {
+      addToast('Facture vide. Ajoutez au moins une ligne.', 'error');
+      return;
+    }
+
+    if (isDeferred) {
+      const error = validateCredit(dateEcheance);
+      if (error) { addToast(error, 'error'); return; }
+    }
+
+    isSubmittingSaleRef.current = true;
+    try {
+      const { updated: updatedBatches, venduIds } = deductStockByQuantity(data.stockBatches, totalQte);
+
+      const newSale: Sale = {
+        id: crypto.randomUUID(),
+        clientId: client.id,
+        clientNom: client.nom,
+        pouletIds: venduIds,
+        total: totalFacture,
+        isCredit: isDeferred,
+        dueDate: isDeferred ? dateEcheance : undefined,
+        isPaid: !isDeferred,
+        dateVente: new Date(dateFacture).toISOString(),
+        factureItems: items.map(i => ({
+          designation: i.designation,
+          qte: i.qte,
+          prixU: i.prixU,
+          poids: i.poids,
+        })),
+      };
+
+      const updatedClients = !data.clients.find(c => c.id === client.id)
+        ? [...data.clients, client]
+        : data.clients;
+
+      setData({
+        ...data,
+        clients: updatedClients,
+        stockBatches: updatedBatches,
+        sales: [newSale, ...data.sales],
+      });
+
+      handleCloseAddModal();
+      addToast(`Vente enregistrée ! Stock mis à jour (-${totalQte} poulets)`, 'success');
+    } finally {
+      isSubmittingSaleRef.current = false;
+    }
+  }, [items, clientNom, clientTel, selectedClientId, isDeferred, dateEcheance, dateFacture, totalQte, totalFacture, data, setData, addToast, handleCloseAddModal]);
 
   const generateSaleReceiptBlob = useCallback(async (sale: Sale, clientNom: string, clientTel: string): Promise<Blob | null> => {
     return new Promise((resolve) => {
@@ -312,108 +454,217 @@ export const VentesView = ({ data, setData, onTabChange, permissions = [] }: Ven
         {filteredSales.length === 0 && <p className="text-center text-sm text-gray-400 py-10">Aucune vente enregistrée</p>}
       </div>
 
-      {/* Modal Nouvelle Vente */}
-      <Modal isOpen={isAddModalOpen} onClose={resetAddModal} title="Nouvelle Vente">
-        <form onSubmit={handleAddSale} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Client *</label>
-            <select name="clientId" required className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm appearance-none dark:border-gray-600 dark:text-white">
-              <option value="">Choisir un client</option>
-              {data.clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
-            </select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Lot de Stock *</label>
-            <select 
-              value={selectedBatchId}
-              onChange={(e) => { setSelectedBatchId(e.target.value); setBasket([]); }}
-              required 
-              className="w-full p-4 border rounded-2xl bg-gray-50 outline-none text-sm appearance-none"
+      {/* Modal Nouvelle Vente — Formulaire simplifié type Facturier */}
+      <Modal isOpen={isAddModalOpen} onClose={handleCloseAddModal} title="Nouvelle Vente">
+        <form onSubmit={handleSubmitSale} className="space-y-4">
+          {/* ── Client section ── */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 text-orange-500" />
+              <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Client</span>
+            </div>
+            <select
+              value={selectedClientId}
+              onChange={(e) => setSelectedClientId(e.target.value)}
+              className="w-full p-3 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm appearance-none dark:border-gray-600 dark:text-white"
             >
-              <option value="">Sélectionner le stock source</option>
-              {availableBatches.map(b => (
-                <option key={b.id} value={b.id}>
-                  {b.nom} ({b.quantite && b.quantite > 0 ? b.quantite : b.poulets.filter(p => !p.vendu).length} dispos)
-                </option>
+              <option value="">-- Client de passage (saisie libre) --</option>
+              {data.clients.map(c => (
+                <option key={c.id} value={c.id}>{c.nom} {c.tel ? `(${c.tel})` : ''}</option>
               ))}
             </select>
-          </div>
-          
-          {/* Quantité pour lots groupés */}
-          {selectedBatch?.quantite && selectedBatch.quantite > 0 && (
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Quantité à vendre</label>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setQteVente(Math.max(1, qteVente - 1))} className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700 font-bold text-lg flex items-center justify-center active:scale-90">-</button>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Nom</label>
                 <input
-                  type="number" min="1" max={selectedBatch.quantite}
-                  value={qteVente}
-                  onChange={(e) => setQteVente(Math.min(selectedBatch.quantite, Math.max(1, parseInt(e.target.value) || 1)))}
-                  className="flex-1 p-3 border rounded-xl bg-gray-50 dark:bg-gray-800 text-center text-lg font-bold dark:text-white outline-none"
+                  type="text"
+                  value={clientNom}
+                  onChange={(e) => setClientNom(e.target.value)}
+                  placeholder="Ex: Moussa Diop"
+                  className="w-full p-3 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm dark:text-white dark:border-gray-600"
                 />
-                <button type="button" onClick={() => setQteVente(Math.min(selectedBatch.quantite, qteVente + 1))} className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700 font-bold text-lg flex items-center justify-center active:scale-90">+</button>
               </div>
-            </div>
-          )}
-          <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-3xl space-y-3 border border-orange-100 dark:border-orange-800/50 shadow-sm">
-            <label className="text-[10px] font-black text-orange-400 dark:text-orange-300 uppercase ml-1">{selectedBatch?.quantite && selectedBatch.quantite > 0 ? 'Vendre au prix unitaire (F)' : 'Ajouter un poulet (Saisie Prix)'}</label>
-            <div className="flex gap-2">
-              <QuickAddGrid
-                options={[3500, 4000, 4500, 5000]}
-                onSelect={(price) => {
-                  setPriceInput(String(price));
-                  handleAddToBasket();
-                }}
-              />
-              <input type="hidden" value={priceInput} readOnly />
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Téléphone</label>
+                <input
+                  type="tel"
+                  value={clientTel}
+                  onChange={(e) => setClientTel(e.target.value)}
+                  placeholder="Ex: 771234567"
+                  className="w-full p-3 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm dark:text-white dark:border-gray-600"
+                />
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase">Panier de vente ({basket.length})</label>
-              {basket.length > 0 && <button type="button" onClick={() => setBasket([])} className="text-[9px] text-red-500 font-bold uppercase">Vider</button>}
+          {/* ── Date & Payment ── */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Date de la vente</label>
+            <input
+              type="date"
+              value={dateFacture}
+              onChange={(e) => setDateFacture(e.target.value)}
+              className="w-full p-3 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm dark:text-white dark:border-gray-600"
+            />
+          </div>
+
+          <div className="p-3 bg-orange-50/50 dark:bg-orange-950/20 rounded-2xl border border-orange-100/50 dark:border-orange-900/30 space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Vente à crédit ?</span>
+                <span className="text-[9px] text-gray-400 block">Paiement différé avec échéance</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={isDeferred}
+                onChange={(e) => setIsDeferred(e.target.checked)}
+                className="w-5 h-5 accent-orange-600 cursor-pointer"
+              />
             </div>
-            <div className="max-h-56 overflow-y-auto border border-gray-100 dark:border-gray-700 rounded-2xl p-2 bg-gray-50 dark:bg-gray-800/50 space-y-1">
-              {basket.length === 0 && <p className="text-center text-xs text-gray-400 dark:text-gray-500 py-6 italic">Aucun poulet sélectionné</p>}
-              {basket.map(p => (
-                <div key={p.id} className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 text-xs shadow-sm">
-                  <span className="px-2 py-1 rounded-lg text-[10px] font-black tracking-wider bg-orange-100 text-orange-700">{p.isGroup ? `x${p.quantiteGroupe}` : p.numero}</span>
-                  <div className="flex-1">
-                    <div className="text-[9px] text-gray-400">{p.isGroup ? `${p.quantiteGroupe} poulet(s)` : `${p.poids} kg`}</div>
+            {isDeferred && (
+              <div className="space-y-1 pt-1">
+                <label className="text-[9px] text-gray-400 font-black uppercase ml-1">Date d'échéance (max 15 jours)</label>
+                <input
+                  type="date"
+                  value={dateEcheance}
+                  min={dateFacture}
+                  max={new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0]}
+                  onChange={(e) => setDateEcheance(e.target.value)}
+                  className="w-full p-2.5 border border-orange-200 dark:border-orange-800 rounded-xl outline-none text-sm bg-white dark:bg-gray-800 dark:text-white"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* ── Items table ── */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-orange-500" />
+              <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Lignes de vente</span>
+            </div>
+
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {items.map((item, index) => (
+                <div
+                  key={item.id}
+                  onClick={() => setActiveItemIndex(index)}
+                  className={`p-3 rounded-2xl border transition-all space-y-2 cursor-pointer ${
+                    activeItemIndex === index
+                      ? 'border-orange-500 bg-orange-50/10 dark:bg-orange-950/10 shadow-sm'
+                      : 'border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black ${
+                      activeItemIndex === index ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                    }`}>
+                      LIGNE {index + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleRemoveItem(item.id); }}
+                      className="text-gray-300 hover:text-red-500 transition-colors p-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <div className="font-black text-orange-600 text-sm">{formatCurrency(p.prix)}</div>
-                  <button type="button" onClick={() => handleRemoveFromBasket(p.id)} className="text-gray-300 hover:text-red-500 ml-1">
-                    <MinusCircle className="w-4 h-4" />
-                  </button>
+
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="col-span-4 sm:col-span-1 space-y-1">
+                      <label className="text-[8px] font-black text-gray-400 dark:text-gray-500 uppercase">Désignation</label>
+                      <div className="w-full p-2 border border-gray-100 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400">Poulet de chair</div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[8px] font-black text-gray-400 dark:text-gray-500 uppercase">Qté</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.qte}
+                        onChange={(e) => handleUpdateItem(index, 'qte', Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full p-2 border border-gray-100 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-xs text-center font-bold dark:text-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[8px] font-black text-gray-400 dark:text-gray-500 uppercase">Poids/pc (kg)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={item.poids}
+                        onChange={(e) => handleUpdateItem(index, 'poids', Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="w-full p-2 border border-gray-100 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-xs text-center dark:text-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[8px] font-black text-gray-400 dark:text-gray-500 uppercase">Prix U (F)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.prixU}
+                        onChange={(e) => handleUpdateItem(index, 'prixU', Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full p-2 border border-gray-100 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-xs text-right font-black text-orange-600 dark:text-orange-400"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Ligne info */}
+                  <div className="text-[9px] text-gray-400 dark:text-gray-500">
+                    <span>Total ligne : <strong className="text-gray-700 dark:text-gray-300">{(item.qte * item.prixU).toLocaleString('fr-FR')} F</strong></span>
+                    {item.poids > 0 && (
+                      <span className="ml-3">Prix/kg : <strong className="text-gray-700 dark:text-gray-300">{Math.round(item.prixU / item.poids).toLocaleString('fr-FR')} F</strong></span>
+                    )}
+                  </div>
+
+                  {/* Quick select prices (only on active line) */}
+                  {activeItemIndex === index && (
+                    <div className="flex gap-1.5 flex-wrap items-center pt-0.5">
+                      <span className="text-[8px] font-bold text-gray-400 dark:text-gray-500 uppercase mr-1">Prix rapide :</span>
+                      {QUICK_PRICES.map(price => (
+                        <button
+                          key={price}
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleUpdateItem(index, 'prixU', price); }}
+                          className="px-2.5 py-1 text-[10px] bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold rounded-lg border border-gray-200/50 dark:border-gray-600 hover:border-orange-500 hover:bg-orange-50/50 active:scale-95 transition-all"
+                        >
+                          {price} F
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
+
+            <button
+              type="button"
+              onClick={handleAddItem}
+              className="w-full text-xs font-black uppercase tracking-wider text-orange-600 bg-orange-50 dark:bg-orange-950/40 py-3 rounded-2xl border-2 border-dashed border-orange-200 dark:border-orange-900/50 hover:bg-orange-100 dark:hover:bg-orange-950/60 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+            >
+              <Plus className="w-4 h-4" /> Ajouter une ligne
+            </button>
           </div>
 
-          <div className="p-4 bg-white dark:bg-gray-800 rounded-3xl space-y-3 border border-gray-100 dark:border-gray-700 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Vente à crédit ?</span>
-              <input name="isCredit" type="checkbox" className="w-6 h-6 accent-orange-600" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[9px] text-gray-400 font-black ml-1 uppercase">Date d'échéance (max 15 jours)</label>
-              <input name="dueDate" type="date" min={new Date().toISOString().split('T')[0]} max={new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0]} className="w-full p-3 border rounded-xl text-sm outline-none bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
-            </div>
-          </div>
-
-          <div className="flex justify-between items-center px-4 py-2 bg-gray-900 dark:bg-gray-950 text-white rounded-2xl">
+          {/* ── Total + Stock info ── */}
+          <div className="flex justify-between items-center px-4 py-3 bg-gray-900 dark:bg-gray-950 text-white rounded-2xl">
             <div className="text-[10px] font-black uppercase tracking-widest opacity-50">TOTAL À PAYER</div>
-            <div className="text-xl font-black">{formatCurrency(basket.reduce((acc, p) => acc + p.prix, 0))}</div>
+            <div className="text-xl font-black">{formatCurrency(totalFacture)}</div>
           </div>
 
-          <button 
-            type="submit" 
-            disabled={basket.length === 0}
-            className={`w-full p-5 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-transform mt-2 ${basket.length > 0 ? 'bg-orange-600 text-white shadow-orange-100' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+          <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <span>Le stock sera automatiquement déduit ({totalQte} poulet(s) — lots avec stock disponible).</span>
+          </div>
+
+          <button
+            type="submit"
+            disabled={totalQte <= 0}
+            className={`w-full p-4 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-transform ${
+              totalQte > 0
+                ? 'bg-orange-600 text-white shadow-orange-100'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+            }`}
           >
-            Valider la commande
+            Valider la vente
           </button>
         </form>
       </Modal>
