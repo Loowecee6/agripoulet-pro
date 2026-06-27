@@ -61,7 +61,7 @@ export function useSyncManager({
 
   // Process pending sync queue when coming back online
   const processSyncQueue = useCallback(async () => {
-    if (!user || !isAdmin) return;
+    if (!user) return;
     const queue = await offlineService.getSyncQueue();
     if (queue.length === 0) return;
 
@@ -73,9 +73,12 @@ export function useSyncManager({
 
     try {
       if (latestOp.type === 'saveData') {
-        await storageService.forceSync(user.uid, latestOp.data);
+        if (isAdmin) {
+          await storageService.forceSync(user.uid, latestOp.data);
+        }
+        // Non-admin : les données sont déjà en local, on vide juste la queue
       }
-      // Clear all processed items
+      // Ne supprimer que l'opération traitée (pas tout le lot)
       for (const op of queue) {
         if (op.id) {
           await offlineService.removeFromSyncQueue(op.id);

@@ -65,7 +65,7 @@ export default function App() {
     syncError,
     hasPendingSync,
     pendingSyncCount,
-  } = useSyncManager({ user, data, isInitialLoading, isOnline, isAdmin: userRole === 'admin' || userRole === 'super_admin' });
+  } = useSyncManager({ user, data, isInitialLoading, isOnline, isAdmin: userRole === 'admin' || userRole === 'super_admin' || userRole === 'manager' });
 
   // ── Hook : Auto-backup automatique ──
   useAutoBackup(data, user, isInitialLoading);
@@ -81,12 +81,16 @@ export default function App() {
   useEffect(() => {
     if (!user) {
       setData(null);
+      setUserRole(null);
       setIsInitialLoading(false);
       return;
     }
     const init = async () => {
       setIsInitialLoading(true);
       try {
+        // Réinitialiser le cache des IDs avant de charger pour un nouvel utilisateur
+        storageService.resetCache();
+
         const [cloudData, role] = await Promise.all([
           storageService.loadData(user.uid),
           getUserRole(user.uid, user.email || undefined, user.displayName || undefined),
@@ -107,16 +111,17 @@ export default function App() {
   // ── Helper console + forceSync avec retour visuel ──
   const handleForceSync = useCallback(async () => {
     if (!user || !data || isForcingSync) return;
+    if (!(userRole === 'admin' || userRole === 'super_admin' || userRole === 'manager')) {
+      setSyncFlash('❌ Seuls les admins et managers peuvent forcer la sync');
+      return;
+    }
     setIsForcingSync(true);
     try {
       const ok = await storageService.forceSync(user.uid, data);
       if (ok) setSyncFlash('✅ Sync réussie');
       else {
         try {
-          const { setDoc } = await import('firebase/firestore');
-          const { doc } = await import('firebase/firestore');
-          const { db } = await import('./services/firebaseConfig');
-          await setDoc(doc(db, 'sharedData', 'singleton'), data);
+          await storageService.saveData(user.uid, data);
           setSyncFlash('✅ Sync directe réussie');
         } catch (directErr: any) {
           setSyncFlash('❌ ' + (directErr?.message || 'Erreur inconnue'));
@@ -127,7 +132,7 @@ export default function App() {
     } finally {
       setIsForcingSync(false);
     }
-  }, [user, data, isForcingSync]);
+  }, [user, data, isForcingSync, userRole]);
 
   useEffect(() => {
     if (syncFlash) {

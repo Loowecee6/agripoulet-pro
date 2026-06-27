@@ -54,61 +54,69 @@ service cloud.firestore {
       return field is map;
     }
 
-    // ── Validation du schéma AppData ───────────────────────────────
+    // ── Validation de schéma par collection ─────────────────────────
+    // Appliquée en écriture (create/update) pour garantir l'intégrité des données
 
-    // Validation des types pour un objet Sale
-    function validateSale(sale) {
-      return isString(sale.id)
-        && isString(sale.clientId)
-        && isString(sale.clientNom)
-        && isList(sale.pouletIds)
-        && isNumber(sale.total)
-        && isBool(sale.isCredit)
-        && isBool(sale.isPaid)
-        && isString(sale.dateVente);
+    // Production batch
+    function validateProductionBatchWrite() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['id', 'nom', 'dateMisePlace', 'nbPoussinsInitial',
+        'prixAchatPoussin', 'suiviQuotidien', 'depenses', 'vaccinations', 'statut'])
+        && isString(d.id) && isString(d.nom) && isString(d.dateMisePlace)
+        && isNumber(d.nbPoussinsInitial) && isNumber(d.prixAchatPoussin)
+        && isList(d.suiviQuotidien) && isList(d.depenses) && isList(d.vaccinations)
+        && isString(d.statut) && d.statut in ['active', 'cloturee']
+        && d.size() < 500000;
     }
 
-    // Validation des types pour un objet ProductionBatch
-    function validateProductionBatch(batch) {
-      return isString(batch.id)
-        && isString(batch.nom)
-        && isString(batch.dateMisePlace)
-        && isNumber(batch.nbPoussinsInitial)
-        && isNumber(batch.prixAchatPoussin)
-        && isList(batch.suiviQuotidien)
-        && isList(batch.depenses)
-        && isList(batch.vaccinations)
-        && batch.statut in ['active', 'cloturee'];
+    // Stock batch
+    function validateStockBatchWrite() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['id', 'nom', 'lettre', 'prixKg', 'coutInitial', 'poulets', 'isFinalized', 'typeOrigine'])
+        && isString(d.id) && isString(d.nom) && isString(d.lettre)
+        && isNumber(d.prixKg) && isNumber(d.coutInitial)
+        && isList(d.poulets) && isBool(d.isFinalized)
+        && isString(d.typeOrigine) && d.typeOrigine in ['PR', 'IM']
+        && d.size() < 500000;
     }
 
-    // Validation des types pour un objet StockBatch
-    function validateStockBatch(batch) {
-      return isString(batch.id)
-        && isString(batch.nom)
-        && isString(batch.lettre)
-        && isNumber(batch.prixKg)
-        && isList(batch.poulets);
+    // Client
+    function validateClientWrite() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['id', 'nom', 'tel'])
+        && isString(d.id) && isString(d.nom) && isString(d.tel)
+        && d.size() < 10000;
     }
 
-    // Validation des types pour un objet Client
-    function validateClient(client) {
-      return isString(client.id)
-        && isString(client.nom)
-        && isString(client.tel);
+    // Sale
+    function validateSaleWrite() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['id', 'clientId', 'clientNom', 'pouletIds',
+        'total', 'isCredit', 'isPaid', 'dateVente'])
+        && isString(d.id) && isString(d.clientId) && isString(d.clientNom)
+        && isList(d.pouletIds) && isNumber(d.total)
+        && isBool(d.isCredit) && isBool(d.isPaid) && isString(d.dateVente)
+        && d.size() < 100000;
     }
 
-    // Validation du document AppData complet
-    function validateAppData() {
-      let data = request.resource.data;
-      return isList(data.productionBatches)
-        && isList(data.stockBatches)
-        && isList(data.clients)
-        && isList(data.sales)
-        && isList(data.reservations)
-        && isMap(data.settings)
-        // Validation optionnelle des premiers éléments
-        && (data.sales.size() == 0 || validateSale(data.sales[0]))
-        && data.size() < 900000;
+    // Reservation
+    function validateReservationWrite() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['id', 'clientId', 'clientNom', 'pouletIds',
+        'dateReserve', 'statut', 'createdAt'])
+        && isString(d.id) && isString(d.clientId) && isString(d.clientNom)
+        && isList(d.pouletIds) && isString(d.dateReserve) && isString(d.createdAt)
+        && isString(d.statut) && d.statut in ['pending', 'confirmed', 'cancelled', 'completed']
+        && d.size() < 100000;
+    }
+
+    // Activity log entry
+    function validateActivityLogWrite() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['id', 'date', 'userId', 'userName', 'userRole', 'action', 'description'])
+        && isString(d.id) && isString(d.date) && isString(d.userId)
+        && isString(d.userName) && isString(d.userRole) && isString(d.action) && isString(d.description)
+        && d.size() < 5000;
     }
 
     // ── Règles ─────────────────────────────────────────────────────
@@ -119,22 +127,105 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'];
     }
 
-    // ── Données partagées (lecture pour tous, écriture admin uniquement) ─────
+    // Vérifie si l'utilisateur a le droit d'écrire dans les collections partagées
+    function isWriter() {
+      return isAuthenticated()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin', 'manager'];
+    }
+
+    // ── Ancien singleton sharedData (lecture seule pour migration) ──────────
     match /sharedData/{document} {
       allow read: if isAuthenticated();
-      allow create, update: if isAdmin() && isSized();
+      allow write: if false; // Plus utilisé depuis la migration vers collections
+    }
+
+    // ── NOUVELLES COLLECTIONS PAR TYPE D'ENTITÉ ────────────────────────────
+    // Chaque entité dans son propre document (plus de limite 1 Mo, pas de contention)
+
+    // ── COLLECTIONS PAR TYPE D'ENTITÉ (avec validation de schéma) ──
+
+    // Production batches
+    match /productionBatches/{batchId} {
+      allow read: if isAuthenticated();
+      allow create: if isWriter() && validateProductionBatchWrite() && isSized();
+      allow update: if isWriter() && validateProductionBatchWrite() && isSized();
+      allow delete: if isWriter();
+    }
+
+    // Stock batches
+    match /stockBatches/{batchId} {
+      allow read: if isAuthenticated();
+      allow create: if isWriter() && validateStockBatchWrite() && isSized();
+      allow update: if isWriter() && validateStockBatchWrite() && isSized();
+      allow delete: if isWriter();
+    }
+
+    // Clients
+    match /clients/{clientId} {
+      allow read: if isAuthenticated();
+      allow create: if isWriter() && validateClientWrite() && isSized();
+      allow update: if isWriter() && validateClientWrite() && isSized();
+      allow delete: if isWriter();
+    }
+
+    // Sales
+    match /sales/{saleId} {
+      allow read: if isAuthenticated();
+      allow create: if isWriter() && validateSaleWrite() && isSized();
+      allow update: if isWriter() && validateSaleWrite() && isSized();
+      allow delete: if isWriter();
+    }
+
+    // Reservations
+    match /reservations/{reservationId} {
+      allow read: if isAuthenticated();
+      allow create: if isWriter() && validateReservationWrite() && isSized();
+      allow update: if isWriter() && validateReservationWrite() && isSized();
+      allow delete: if isWriter();
+    }
+
+    // Settings (singleton — writer seulement, avec validation minimale)
+    match /settings/{document} {
+      allow read: if isAuthenticated();
+      allow create, update: if isWriter()
+        && isMap(request.resource.data)
+        && isString(request.resource.data.adminPasswordHash)
+        && request.resource.data.size() < 50000;
       allow delete: if false;
     }
 
-    // Document utilisateur (profil + rôle)
+    // Activity log (append-only, avec validation)
+    match /activityLog/{entryId} {
+      allow read: if isAuthenticated();
+      allow create: if isWriter() && validateActivityLogWrite() && isSized();
+      allow update: if false; // Le journal d'activité est immuable
+      allow delete: if false;
+    }
+
+    // User permissions
+    match /userPermissions/{document} {
+      allow read: if isAuthenticated();
+      allow create: if isWriter() && isMap(request.resource.data) && request.resource.data.size() < 100000;
+      allow update: if isWriter() && isMap(request.resource.data) && request.resource.data.size() < 100000;
+      allow delete: if false;
+    }
+
+    // FCM config (admin seulement)
+    match /fcm/{document} {
+      allow read: if isAuthenticated();
+      allow create: if isWriter() && request.resource.data.size() < 5000;
+      allow update: if isWriter() && request.resource.data.size() < 5000;
+      allow delete: if false;
+    }
+
+    // ── Document utilisateur (profil + rôle) ────────────────────────────────
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId)
         && request.resource.data.keys().hasAll(['role', 'createdAt']);
       allow update: if isOwner(userId) || isAdmin();
 
-      // Sous-collection appData (ancienne, en cours de migration vers sharedData)
-      // Accessible en lecture pour le propriétaire ou l'admin (migration)
+      // Sous-collection appData (ancienne, lecture seule pour migration)
       match /appData/{document} {
         allow read: if isOwner(userId) || isAdmin();
       }
