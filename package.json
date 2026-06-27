@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:signup": "tsx scripts/signup_test.ts"
+    "test:signup": "tsx scripts/signup_test.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "firebase": "^12.13.0",
@@ -22,11 +24,13 @@
     "recharts": "^3.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.0.0",
     "dotenv": "^17.4.2",
+    "fake-indexeddb": "^6.2.5",
     "idb": "^8.0.3",
     "tsx": "^4.7.2",
     "typescript": "~5.8.2",

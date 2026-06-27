@@ -104,7 +104,7 @@
 | **Relance WhatsApp groupée** | ✅ | NEW — Liste des retards avec bouton 1-clic |
 | Raccourcis rapides | ✅ | Nouvelle vente, client, production, rapport |
 
-### 🔔 Notifications push
+### 🔔 Notifications push & distantes
 | Fonctionnalité | Statut | Notes |
 |---|---|---|
 | Service Worker FCM | ✅ | firebase-messaging-sw.js |
@@ -116,6 +116,10 @@
 | Notification native popup | ✅ | Même app ouverte |
 | Paramètres de notification | ✅ | Toggles par type |
 | Badge Header riche | ✅ | Danger count + pulsation |
+| **Push distant FCM v1** | ✅ | Cloudflare Worker (gratuit) — pas de Blaze plan requis |
+| Worker Cloudflare déployé | ✅ | `https://agripoulet-push.loowecee6.workers.dev` |
+| Compte de service Firebase | ✅ | OAuth2 + JWT pour FCM HTTP v1 |
+| URL configurée dans Firestore | ✅ | `fcm/config → pushFunctionUrl` |
 
 ### 🌙 Mode sombre
 | Fonctionnalité | Statut | Notes |
@@ -171,9 +175,9 @@
 | `formatWhatsAppUrl` dupliqué dans 3 fichiers (ClientsView, EcheancesView, DashboardView) | 🟡 Faible | Extraire dans `utils/whatsapp.ts` |
 | EcheancesView manque de classes `dark:` sur certains éléments (bg-gradient, bg-red-50...) | 🟡 Faible | Compléter le dark mode |
 | Navigation par `document.querySelector('[data-tab="..."]')` fragile | 🟡 Faible | Passer par un callback/ref |
-| Pas de tests unitaires | 🟡 Moyen | Ajouter tests sur helpers critiques |
-| Pas de tests e2e | 🟡 Faible | Ajouter test parcours vente |
-| firebaseConfig.ts erreurs `import.meta.env` en TypeScript strict | 🟠 Préexistant | Ajouter Vite client types |
+| ✅ **72 tests unitaires** (storageService) | 🟢 OK | Tests ajoutés le 26 juin 2026 |
+| Tests e2e Playwright (parcours vente) | 🟡 Faible | 6 tests créés (e2e/sales.spec.ts) — nécessite auth Email/Mot de passe Firebase |
+| firebaseConfig.ts erreurs `import.meta.env` en TypeScript strict | 🟢 OK | ✅ `vite-env.d.ts` ajouté le 26 juin 2026 |
 | scripts/ erreurs TypeScript (non utilisés en prod) | 🟢 OK | Ignorables |
 
 ---
@@ -198,8 +202,9 @@
 | — | ✅ | **Extraction utilitaire WhatsApp** | Fait | `utils/whatsapp.ts` |
 | — | ✅ | **Tests unitaires** (37 tests) | Fait | Vitest configuré |
 | — | ✅ | **Extraction helpers crédit** | Fait | `utils/creditHelpers.ts` |
-| 1 | 🟢 P3 | **CI GitHub Actions** — Tests automatiques à chaque push | ~1h | — |
-| 2 | 🟡 P2 | **Déployer Cloud Functions Firebase** — Activer push distants | ~30min | Firebase Blaze ou inscription |
+| 1 | 🟢 P3 | **CI GitHub Actions** — Tests automatiques à chaque push | ~1h | ✅ Fait — 26 juin 2026 |
+| 2 | 🟡 P2 | **Notifications push distantes FCM** — Alternative Cloudflare Worker | ~1h | ✅ Fait — 26 juin 2026 (Worker gratuit au lieu de Cloud Functions Blaze) |
+| 3 | 🟢 P3 | **Fichier Worker Cloudflare** | 15min | ✅ `functions/cloudflare-worker.js` avec FCM HTTP v1 + OAuth2 service account |
 
 ---
 
@@ -268,8 +273,8 @@ Si hors-ligne → offlineService.addToSyncQueue() → sync auto au retour
 6. ⬜ **Ajouter Vite client types** pour résoudre l'erreur `import.meta.env` (option `vite/client` dans tsconfig)
 
 ### Moyen terme (2-4h)
-7. ⬜ **Configurer les clés VAPID** dans la console Firebase pour activer les push distants
-8. ⬜ **Tests unitaires** sur `getRemainingBalance`, `getCreditRisk`, `formatWhatsAppUrl`
+7. ✅ **Push distant FCM** via Cloudflare Worker (gratuit, alternative à Cloud Functions Blaze)
+8. ✅ **72 tests unitaires** sur storageService.ts (helpers, cache, writeEntities, saveData, loadData, migration)
 9. ⬜ **Sécuriser Firestore** avec des règles plus restrictives (vérifier auth + propriétaire)
 
 ### Long terme (4h+)
@@ -282,4 +287,6 @@ Si hors-ligne → offlineService.addToSyncQueue() → sync auto au retour
 - **Firestore** : données sous `users/{uid}/appData/singleton`, backups sous `users/{uid}/backups`
 - **Coût Firestore** : ~1 document principal + N documents backup (faible volume, niveau gratuit)
 - **PWA** : Service Worker installé (vite-plugin-pwa), cache les assets
-- **FCM** : Service Worker prêt, nécessite clé VAPID pour push distants
+- **FCM** : Push distants via Cloudflare Worker (`functions/cloudflare-worker.js`) avec FCM HTTP v1 + compte de service Firebase
+- **Architecture push** : App → Worker Cloudflare (OAuth2 JWT) → FCM v1 API → Service Worker navigateur → Notification affichée même app fermée
+- **URL Worker** : `https://agripoulet-push.loowecee6.workers.dev` (configurée dans Firestore `fcm/config`)

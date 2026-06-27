@@ -1,0 +1,9 @@
+# AgriPoulet Pro — Cloudflare Worker config
+# Envoi de notifications push FCM via Worker
+
+name = "agripoulet-push"
+main = "functions/cloudflare-worker.js"
+compatibility_date = "2025-04-01"
+
+# La clé serveur FCM sera ajoutée séparément via:
+# npx wrangler secret put FCM_SERVER_KEY

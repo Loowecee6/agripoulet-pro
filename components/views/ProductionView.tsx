@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Users, Coins, TrendingUp, MessageSquare, CheckCircle2, Edit2, Trash2, Download, BarChart3 } from 'lucide-react';
+import { useToast } from '../common/ToastContext';
 import { AppData, User, ProductionBatch, DailyRecord, Expense, StockBatch, Chicken } from '../../types';
 import { PROGRAMME_VACCINATION, POIDS_THEORIQUE_REFERENCE } from '../../constants';
 import { formatDateShort } from '../../utils/dateFormat';
@@ -19,6 +20,7 @@ interface ProductionViewProps {
 }
 
 export const ProductionView = ({ data, setData, user, permissions }: ProductionViewProps) => {
+  const { addToast } = useToast();
   const can = (perm: string) => permissions.includes(perm);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedBatch, setSelectedBatch] = useState<ProductionBatch | null>(null);

@@ -36,13 +36,15 @@ export async function getUserRole(uid: string, email?: string, displayName?: str
       return (data.role as UserRole) || DEFAULT_ROLE;
     }
     // Document non trouvé → créer avec rôle par défaut
+    const isAdminEmail = email && ['loowecee6@gmail.com', 'destigny@gmail.com', 'admin@agripoulet-pro.com'].includes(email.toLowerCase());
+    const initialRole: UserRole = isAdminEmail ? 'admin' : DEFAULT_ROLE;
     await setDoc(userDoc, {
-      role: DEFAULT_ROLE,
+      role: initialRole,
       email: email || '',
       displayName: displayName || '',
       createdAt: serverTimestamp(),
     });
-    return DEFAULT_ROLE;
+    return initialRole;
   } catch (e) {
     console.warn('[userService] Erreur chargement rôle, fallback viewer:', e);
     return DEFAULT_ROLE;

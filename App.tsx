@@ -25,6 +25,7 @@ import { useFCMNotifications } from './hooks/useFCMNotifications';
 import { getUserRole } from './services/userService';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { exportFullBackup } from './utils/exportXLS';
 
 const APP_VERSION = 'v6';
 
@@ -152,10 +153,8 @@ export default function App() {
           notifications={notifications}
           overdueCount={overdueCount}
           notificationEvents={notificationEvents}
-          isSyncing={false}
           isOnline={isOnline}
-          hasPendingSync={false}
-          pendingSyncCount={0}
+          onBackup={cloudData ? () => exportFullBackup(cloudData) : undefined}
           syncError={syncError}
           onOpenNotifSettings={() => setShowNotifSettings(true)}
           darkMode={cloudData?.settings.darkMode}

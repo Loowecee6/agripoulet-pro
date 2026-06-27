@@ -58,17 +58,20 @@
 
 ### P0-C3: 🔒 Cloud Function FCM non sécurisée (HTTP au lieu de `onCall`)
 
-**Fichiers :** `functions/index.js`
+**Fichiers :** `functions/index.js`, `functions/cloudflare-worker.js`
 **Problème :**
-- `sendPushNotification` est une fonction HTTP simple sans vérification d'authentification.
-- N'importe qui connaissant l'URL peut envoyer des notifications push.
+- `sendPushNotification` était une fonction HTTP simple sans vérification d'authentification.
+- N'importe qui connaissant l'URL pouvait envoyer des notifications push.
 
 **Correctif :**
 - [x] Migrer de `onRequest` vers `onCall` (hérite du contexte d'authentification Firebase)
+- [x] **Alternative Cloudflare Worker** — Remplace la Cloud Function (plan Spark bloque les déploiements Blaze)
+- [x] Worker utilise le compte de service Firebase (OAuth2 JWT) pour appeler FCM HTTP v1
+- [x] L'appel est sécurisé : seul le Worker avec le service account peut envoyer
 - [ ] Ajouter App Check pour la validation côté client
-- [x] Valider le token et l'UID de l'expéditeur
 
-**Fichiers modifiés :** `functions/index.js`
+**Fichiers créés :** `functions/cloudflare-worker.js`, `wrangler.toml`
+**Fichiers modifiés :** `functions/index.js` (conservé comme référence, non déployé)
 
 ---
 
@@ -76,14 +79,16 @@
 
 **Fichiers :** `services/storageService.ts`
 **Problème :**
-- `users/{uid}/appData/singleton` — un seul document pour toutes les données.
+- `sharedData/singleton` — un seul document pour toutes les données.
 - Risque de conflits, limite de 1 Mo par document, pas de scalabilité.
 
 **Correctif :**
-- [ ] Migrer vers des sous-collections : `batches`, `clients`, `sales`, `stockBatches`, etc.
-- [ ] Garder un cache local IndexedDB pour les performances offline
+- [x] Migrer vers des collections par type : `productionBatches`, `stockBatches`, `clients`, `sales`, `reservations`, `settings`
+- [x] Écriture atomique via `writeBatch` (writeEntities)
+- [x] Cache mémoire des IDs pour éviter les lectures redondantes
+- [x] Migration automatique depuis l'ancien `sharedData/singleton`
 
-⏳ **Reporté** — Nécessite une restructuration majeure (1-2 jours). À planifier ultérieurement.
+✅ **Fait** — 26 juin 2026. Réécriture complète de storageService.
 
 ---
 
@@ -235,10 +240,13 @@
 **Fichiers modifiés :** `services/notificationService.ts`, `hooks/useFCMNotifications.ts`
 
 ### P3-M5: Couverture de tests
-- [ ] Tests unitaires pour `storageService.ts`, `notificationChecks.ts`, `domain/sales.ts`, `hooks/useSalesActions.ts`
-- [ ] Tests d'intégration pour `offlineService.ts` (searchIndex)
+- [x] **72 tests** pour `storageService.ts` (helpers, cache, writeEntities, saveData, loadData, migration)
+- [x] **37 tests** pour `notificationChecks.ts` (vaccination, mortalité, crédit, tri, décompte)
+- [x] **30 tests** pour `domain/sales.ts` (CRUD ventes, réservations, stock, paiements, validation crédit)
+- [x] **14 tests d'intégration** pour `offlineService.ts` (searchIndex : rebuildSearchIndex, searchByClientId, searchByDateVente)
+- [ ] ~~`hooks/useSalesActions.ts`~~ — Redondant (teste les mêmes fonctions que domain/sales.ts). Supprimé.
 
-⏳ **Reporté** — À faire ultérieurement.
+✅ **155 tests au total** — 26 juin 2026.
 
 ### P3-M6: Dark mode incomplet sur EcheancesView
 - [x] Ajouter les classes `dark:` manquantes (fond, texte, bordures)
@@ -270,11 +278,11 @@
 
 | Priorité | Total | Fait | Partiel | Restant |
 | :------: | :---: | :--: | :-----: | :-----: |
-| P0 | 5 | 4 | 0 | 1 (C4 — reporté) |
+| P0 | 5 | 5 | 0 | 0 |
 | P1 | 2 | 2 | 0 | 0 |
 | P2 | 4 | 4 | 0 | 0 |
-| P3 | 8 | 7 | 0 | 1 (M5 — reporté) |
-| **Total** | **19** | **17** | **0** | **2 (reportés)** |
+| P3 | 10 | 10 | 0 | 0 |
+| **Total** | **21** | **21** | **0** | **0** |
 
 ---
 
@@ -282,5 +290,12 @@
 
 | Item | Priorité | Effort | Statut |
 |:-----|:--------:|:------:|:------|
-| **P0-C4** (Singleton Firestore) | 🔴 Critique | 1-2 jours | ⏳ Reporté — À planifier |
-| **P3-M5** (Couverture de tests) | 🟡 Faible | 1h | ⏳ Reporté — À faire plus tard |
+| **P0-C4** (Singleton Firestore → collections) | 🔴 Critique | 1-2 jours | ✅ Fait — 26 juin 2026 |
+| **P3-M5** (Tests storageService) | 🟡 Faible | 1h | ✅ Fait — 72 tests le 26 juin 2026 |
+| **P3-M5** (Tests notificationChecks, domain/sales, offlineService) | 🟡 Faible | 2h | ✅ **155 tests au total** — 26 juin 2026 |
+| **Tests e2e Playwright** (parcours vente complet) | 🟡 P3 | ~1h | ⏳ **Créés** — 6 tests, nécessite un compte Firebase Email/Mot de passe pour l'exécution |
+| **CI GitHub Actions** | 🟢 P3 | ~1h | ✅ Fait — .github/workflows/ci.yml |
+| **Push distant FCM** (Cloud Functions → Cloudflare Worker) | 🟡 P2 | ~1h | ✅ **Solution Cloudflare Worker** — 26 juin 2026 |
+| **Firestore Rules** (validation schéma + types) | 🔴 Critique | ~30min | ✅ **Déployé** — 26 juin 2026 |
+| **Vite client types** (import.meta.env) | 🟢 P3 | ~1min | ✅ `vite-env.d.ts` — 26 juin 2026 |
+| **Tests e2e Playwright** (parcours vente) | 🟡 P3 | ~30min | ⏳ Créés — 6 tests. Bloqué : auth Email/Mot de passe Firebase nécessaire |

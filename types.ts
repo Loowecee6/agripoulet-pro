@@ -44,7 +44,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   super_admin: ALL_PERMISSIONS.map(p => p.id),
   admin: ALL_PERMISSIONS.map(p => p.id),
   manager: [
-    'production.view', 'production.suivi', 'production.abattage',
+    'production.create', 'production.view', 'production.suivi', 'production.abattage',
     'stock.view', 'stock.create', 'stock.edit',
     'ventes.create', 'ventes.view', 'ventes.edit',
     'clients.create', 'clients.edit', 'clients.view',

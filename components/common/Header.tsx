@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ShieldCheck, Bell, LogOut, X, Syringe, AlertTriangle, CreditCard, Settings, Moon, Sun, Users } from 'lucide-react';
+import { ShieldCheck, Bell, LogOut, X, Syringe, AlertTriangle, CreditCard, Settings, Moon, Sun, Users, Download } from 'lucide-react';
 import { User, Sale } from '../../types';
 import { ConnectionStatus } from './ConnectionStatus';
 import type { NotificationEvent } from '../../services/notificationService';
@@ -10,15 +10,16 @@ interface HeaderProps {
   notifications: Sale[];
   overdueCount: number;
   notificationEvents?: NotificationEvent[];
-  isSyncing: boolean;
+  isSyncing?: boolean;
   isOnline: boolean;
-  hasPendingSync: boolean;
-  pendingSyncCount: number;
+  hasPendingSync?: boolean;
+  pendingSyncCount?: number;
   syncError?: string | null;
   onOpenNotifSettings?: () => void;
   darkMode?: boolean;
   onToggleDarkMode?: () => void;
   onOpenUserManagement?: () => void;
+  onBackup?: () => void;
   currentSeason?: {
     icon: string;
     label: string;
@@ -28,8 +29,6 @@ interface HeaderProps {
   seasonWarning?: string | null;
   onSeasonOffsetChange?: (offset: number) => void;
   seasonOffset?: number;
-  onForceSync?: () => void;
-  isForcingSync?: boolean;
 }
 
 const notifIcons: Record<string, React.ReactNode> = {
@@ -44,7 +43,7 @@ const severityColors: Record<string, { bg: string; border: string; text: string;
   info: { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-800', dot: 'bg-blue-500' },
 };
 
-export const Header = ({ user, onLogout, notifications, overdueCount, notificationEvents = [], isSyncing, isOnline, hasPendingSync, pendingSyncCount, syncError, onOpenNotifSettings, darkMode, onToggleDarkMode, onOpenUserManagement, currentSeason, seasonWarning, onSeasonOffsetChange, seasonOffset = 0, onForceSync, isForcingSync }: HeaderProps) => {
+export const Header = ({ user, onLogout, notifications, overdueCount, notificationEvents = [], isSyncing = false, isOnline, hasPendingSync = false, pendingSyncCount = 0, syncError, onOpenNotifSettings, darkMode, onToggleDarkMode, onOpenUserManagement, onBackup, currentSeason, seasonWarning, onSeasonOffsetChange, seasonOffset = 0 }: HeaderProps) => {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showSeasonControl, setShowSeasonControl] = useState(false);
   const seasonControlRef = useRef<HTMLDivElement>(null);
@@ -83,16 +82,7 @@ export const Header = ({ user, onLogout, notifications, overdueCount, notificati
                 hasPendingSync={hasPendingSync}
                 pendingCount={pendingSyncCount}
               />
-              {(hasPendingSync || user.role === 'admin' || user.role === 'super_admin') && onForceSync && (
-                <button
-                  onClick={onForceSync}
-                  disabled={isForcingSync || isSyncing}
-                  className="text-[10px] bg-white/15 hover:bg-white/25 disabled:opacity-50 rounded-lg px-1.5 py-0.5 transition-colors"
-                  title="Forcer la synchronisation vers le serveur"
-                >
-                  {isForcingSync ? 'Sync…' : 'Sync'}
-                </button>
-              )}
+
               {currentSeason && (
                 <div className="group relative">
                   <button
@@ -186,6 +176,11 @@ export const Header = ({ user, onLogout, notifications, overdueCount, notificati
           {(user.role === 'super_admin' || user.role === 'admin') && onOpenUserManagement && (
             <button onClick={onOpenUserManagement} className="p-2 hover:bg-white/10 rounded-full" title="Gérer les utilisateurs">
               <Users className="w-5 h-5" />
+            </button>
+          )}
+          {onBackup && (
+            <button onClick={onBackup} className="p-2 hover:bg-white/10 rounded-full" title="Sauvegarde XLS">
+              <Download className="w-5 h-5" />
             </button>
           )}
           <button onClick={onLogout} className="p-2 hover:bg-white/10 rounded-full"><LogOut className="w-5 h-5" /></button>

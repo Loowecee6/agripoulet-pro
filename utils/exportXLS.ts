@@ -53,6 +53,57 @@ export function exportClients(clients: { id: string; nom: string; tel: string; a
   exportToXLS('Clients', headers, rows);
 }
 
+export function exportFullBackup(data: {
+  clients: { id: string; nom: string; tel: string; adresse: string }[];
+  sales: { id: string; clientNom: string; dateVente: string; total: number; isCredit: boolean; isPaid: boolean; dueDate?: string }[];
+  stockBatches: { id: string; nom: string; lettre: string; quantite?: number; poulets: { id: string; numero: string; poids: number; prix: number; vendu: boolean }[] }[];
+  productionBatches: { id: string; nom: string; statut: string; nbPoussinsInitial: number }[];
+}) {
+  const dateStr = new Date().toISOString().split('T')[0];
+  const BOM = '\uFEFF';
+
+  let csv = BOM;
+
+  // ── CLIENTS ──
+  csv += '=== CLIENTS ===\n';
+  csv += 'Nom;Téléphone;Adresse\n';
+  for (const c of data.clients) {
+    csv += `"${c.nom}";"${c.tel || ''}";"${c.adresse || ''}"\n`;
+  }
+
+  // ── VENTES ──
+  csv += '\n=== VENTES ===\n';
+  csv += 'Client;Date;Total (Frs);Type;Statut;Échéance\n';
+  for (const s of data.sales) {
+    csv += `"${s.clientNom}";"${s.dateVente || ''}";${s.total};"${s.isCredit ? 'Crédit' : 'Comptant'}";"${s.isPaid ? 'Payé' : 'Impayé'}";"${s.dueDate || ''}"\n`;
+  }
+
+  // ── STOCK ──
+  csv += '\n=== STOCK ===\n';
+  csv += 'Lot;Lettre;Quantité\n';
+  for (const sb of data.stockBatches) {
+    const qte = sb.quantite ?? sb.poulets.filter(p => !p.vendu).length;
+    csv += `"${sb.nom}";"${sb.lettre}";${qte}\n`;
+  }
+
+  // ── PRODUCTION ──
+  csv += '\n=== PRODUCTION ===\n';
+  csv += 'Bande;Statut;Poussins initiaux\n';
+  for (const pb of data.productionBatches) {
+    csv += `"${pb.nom}";"${pb.statut}";${pb.nbPoussinsInitial}\n`;
+  }
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `Sauvegarde_AgriPoulet_${dateStr}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export function exportBatchSummary(batchName: string, summary: {
   totalInvested: number;
   totalRevenue: number;
