@@ -42,6 +42,7 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
     { id: '1', designation: 'Poulet de chair', qte: 1, prixU: 4000, poids: 1.5 }
   ]);
   const [activeItemIndex, setActiveItemIndex] = useState<number>(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- Autocomplete / Client select handler ---
   useEffect(() => {
@@ -300,56 +301,76 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
     }
   };
 
+  const resetForm = useCallback(() => {
+    setItems([{ id: '1', designation: 'Poulet de chair', qte: 1, prixU: 4000, poids: 1.5 }]);
+    setActiveItemIndex(0);
+    setSelectedClientId('');
+    setClientNom('');
+    setClientTel('');
+    setDateFacture(new Date().toISOString().split('T')[0]);
+    setIsDeferred(false);
+    setDateEcheance(new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
+  }, []);
+
   const handleSaveVente = useCallback(() => {
+    if (isSubmitting) return false;
     if (items.length === 0 || totalFacture <= 0) {
       addToast('Facture vide. Ajoutez au moins une ligne.', 'warning');
       return false;
     }
 
-    // 1. Find or create client
-    const telDigits = clientTel.replace(/\D/g, '');
-    let client = data.clients.find(c => c.tel.replace(/\D/g, '') === telDigits) || null;
-    if (!client && clientNom.trim()) {
-      client = {
-        id: crypto.randomUUID(),
-        nom: clientNom.trim(),
-        tel: clientTel.trim(),
-        adresse: '',
-      };
-    }
+    setIsSubmitting(true);
+    try {
+      // 1. Find or create client
+      const telDigits = clientTel.replace(/\D/g, '');
+      let client = data.clients.find(c => c.tel.replace(/\D/g, '') === telDigits) || null;
+      if (!client && clientNom.trim()) {
+        client = {
+          id: crypto.randomUUID(),
+          nom: clientNom.trim(),
+          tel: clientTel.trim(),
+          adresse: '',
+        };
+      }
 
-    // 2. Deduire du stock la quantite totale vendue
-    const totalQte = items.reduce((s, i) => s + i.qte, 0);
-    const { updated: updatedBatches, venduIds } = deductStockByQuantity(data.stockBatches, totalQte);
+      // 2. Deduire du stock la quantite totale vendue
+      const totalQte = items.reduce((s, i) => s + i.qte, 0);
+      const { updated: updatedBatches, venduIds } = deductStockByQuantity(data.stockBatches, totalQte);
 
       // 3. Create sale entry
-    const newSale: Sale = {
-      id: crypto.randomUUID(),
-      clientId: client?.id || 'inconnu',
-      clientNom: clientNom.trim() || 'Client de passage',
-      pouletIds: venduIds,
-      total: totalFacture,
-      isCredit: isDeferred,
-      dueDate: isDeferred ? dateEcheance : undefined,
-      isPaid: !isDeferred,
-      dateVente: new Date(dateFacture).toISOString(),
-      factureItems: items.map(i => ({
-        designation: i.designation,
-        qte: i.qte,
-        prixU: i.prixU,
-        poids: i.poids,
-      })),
-    };
+      const newSale: Sale = {
+        id: crypto.randomUUID(),
+        clientId: client?.id || 'inconnu',
+        clientNom: clientNom.trim() || 'Client de passage',
+        pouletIds: venduIds,
+        total: totalFacture,
+        isCredit: isDeferred,
+        dueDate: isDeferred ? dateEcheance : undefined,
+        isPaid: !isDeferred,
+        dateVente: new Date(dateFacture).toISOString(),
+        factureItems: items.map(i => ({
+          designation: i.designation,
+          qte: i.qte,
+          prixU: i.prixU,
+          poids: i.poids,
+        })),
+      };
 
-    // 4. Update AppData
-    const updatedClients = client && !data.clients.find(c => c.id === client.id)
-      ? [...data.clients, client]
-      : data.clients;
-    setData({ ...data, clients: updatedClients, stockBatches: updatedBatches, sales: [newSale, ...data.sales] });
+      // 4. Update AppData
+      const updatedClients = client && !data.clients.find(c => c.id === client.id)
+        ? [...data.clients, client]
+        : data.clients;
+      setData({ ...data, clients: updatedClients, stockBatches: updatedBatches, sales: [newSale, ...data.sales] });
 
-    addToast(`Vente enregistrée ! Stock mis à jour (-${totalQte} poulets)`, 'success');
-    return true;
-  }, [items, totalFacture, clientNom, clientTel, isDeferred, dateEcheance, dateFacture, data, setData, addToast]);
+      // 5. Reset form
+      resetForm();
+
+      addToast(`Vente enregistrée ! Stock mis à jour (-${totalQte} poulets)`, 'success');
+      return true;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [items, totalFacture, clientNom, clientTel, isDeferred, dateEcheance, dateFacture, data, setData, addToast, resetForm, isSubmitting]);
 
   const handleShareWhatsApp = () => {
     const ok = handleSaveVente();
@@ -720,7 +741,8 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
 
             <button 
               onClick={handleSaveVente}
-              className="col-span-2 p-5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-100 dark:shadow-none active:scale-95 transition-all"
+              disabled={isSubmitting}
+              className={`col-span-2 p-5 ${isSubmitting ? 'bg-orange-400 cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-700'} text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-100 dark:shadow-none active:scale-95 transition-all`}
             >
               <Check className="w-4 h-4 shrink-0" />
               Enregistrer la vente
@@ -728,7 +750,8 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
 
             <button 
               onClick={handleShareWhatsApp}
-              className="col-span-2 p-5 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-green-100 dark:shadow-none active:scale-95 transition-all"
+              disabled={isSubmitting}
+              className={`col-span-2 p-5 ${isSubmitting ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-green-100 dark:shadow-none active:scale-95 transition-all`}
             >
               <Send className="w-4 h-4 shrink-0" />
               Envoyer par WhatsApp

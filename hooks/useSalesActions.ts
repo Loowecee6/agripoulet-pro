@@ -34,6 +34,7 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
   const [search, setSearch] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState<string>('');
+  const [isSubmittingSale, setIsSubmittingSale] = useState(false);
 
   // État pour la création d'une vente
   const [selectedBatchId, setSelectedBatchId] = useState<string>('');
@@ -104,6 +105,7 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
   const handleAddSale = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
+      if (isSubmittingSale) return;
       if (basket.length === 0) return addToast('Votre panier est vide.', 'error');
 
       const f = new FormData(e.currentTarget);
@@ -111,55 +113,60 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
       const client = data.clients.find(c => c.id === clientId);
       if (!client) return addToast('Veuillez sélectionner un client.', 'error');
 
-      // Calculer la quantité totale (individuels + groupes)
-      const totalQte = basket.reduce((acc, p) => acc + ((p as any).quantiteGroupe || 1), 0);
-      const basketIds = basket.filter(p => !(p as any).isGroup).map(p => p.id);
-      const total = basket.reduce((acc, p) => acc + p.prix, 0);
-      const isCredit = f.get('isCredit') === 'on';
-      const dueDateRaw = f.get('dueDate') as string;
+      setIsSubmittingSale(true);
+      try {
+        // Calculer la quantité totale (individuels + groupes)
+        const totalQte = basket.reduce((acc, p) => acc + ((p as any).quantiteGroupe || 1), 0);
+        const basketIds = basket.filter(p => !(p as any).isGroup).map(p => p.id);
+        const total = basket.reduce((acc, p) => acc + p.prix, 0);
+        const isCredit = f.get('isCredit') === 'on';
+        const dueDateRaw = f.get('dueDate') as string;
 
-      if (isCredit) {
-        const error = validateCredit(dueDateRaw);
-        if (error) return addToast(error, 'error');
-      }
+        if (isCredit) {
+          const error = validateCredit(dueDateRaw);
+          if (error) { setIsSubmittingSale(false); return addToast(error, 'error'); }
+        }
 
-      const { updated: updatedStock, venduIds } = deductStockByQuantity(data.stockBatches, totalQte);
+        const { updated: updatedStock, venduIds } = deductStockByQuantity(data.stockBatches, totalQte);
 
-      const factureItems = basket.map(p => {
-        if ((p as any).isGroup) {
+        const factureItems = basket.map(p => {
+          if ((p as any).isGroup) {
+            return {
+              designation: 'Poulet de chair',
+              qte: (p as any).quantiteGroupe || 1,
+              prixU: Math.round(p.prix / ((p as any).quantiteGroupe || 1)),
+              poids: 0,
+            };
+          }
           return {
             designation: 'Poulet de chair',
-            qte: (p as any).quantiteGroupe || 1,
-            prixU: Math.round(p.prix / ((p as any).quantiteGroupe || 1)),
-            poids: 0,
+            qte: 1,
+            prixU: p.prix,
+            poids: p.poids,
           };
-        }
-        return {
-          designation: 'Poulet de chair',
-          qte: 1,
-          prixU: p.prix,
-          poids: p.poids,
-        };
-      });
+        });
 
-      const newSale = createSale({
-        clientId: client.id,
-        clientNom: client.nom,
-        pouletIds: [...new Set([...basketIds, ...venduIds])],
-        total,
-        isCredit,
-        dueDateRaw,
-        factureItems,
-      });
+        const newSale = createSale({
+          clientId: client.id,
+          clientNom: client.nom,
+          pouletIds: [...new Set([...basketIds, ...venduIds])],
+          total,
+          isCredit,
+          dueDateRaw,
+          factureItems,
+        });
 
-      setData({ ...data, stockBatches: updatedStock, sales: [newSale, ...data.sales] });
-      setIsAddModalOpen(false);
-      setBasket([]);
-      setSelectedBatchId('');
-      setQteVente(1);
-      addToast('Vente enregistrée avec succès', 'success');
+        setData({ ...data, stockBatches: updatedStock, sales: [newSale, ...data.sales] });
+        setIsAddModalOpen(false);
+        setBasket([]);
+        setSelectedBatchId('');
+        setQteVente(1);
+        addToast('Vente enregistrée avec succès', 'success');
+      } finally {
+        setIsSubmittingSale(false);
+      }
     },
-    [basket, data, setData, addToast]
+    [basket, data, setData, addToast, isSubmittingSale]
   );
 
   const handleDeleteSale = useCallback(
@@ -168,8 +175,18 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
       const sale = data.sales.find(s => s.id === saleId);
       if (!sale) return;
 
-      // Soft-delete : marquer comme supprimé au lieu d'effacer
-      const updatedStock = markChickensAsUnsold(data.stockBatches, sale.pouletIds);
+      // Restaurer le stock : poulets individuels + lots groupés
+      let stockToRestore = markChickensAsUnsold(data.stockBatches, sale.pouletIds);
+      if (sale.pouletIds.length === 0 && sale.factureItems?.length) {
+        // Vente depuis un lot groupé : restaurer la quantite
+        const totalQte = sale.factureItems.reduce((s, i) => s + i.qte, 0);
+        stockToRestore = stockToRestore.map(b => {
+          if (b.quantite !== undefined) {
+            return { ...b, quantite: b.quantite + totalQte };
+          }
+          return b;
+        });
+      }
       const deletedSale = {
         ...sale,
         deletedAt: new Date().toISOString(),
@@ -177,7 +194,7 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
       };
       setData({
         ...data,
-        stockBatches: updatedStock,
+        stockBatches: stockToRestore,
         sales: data.sales.map(s => (s.id === saleId ? deletedSale : s)),
       });
       if (selectedSale?.id === saleId) setSelectedSale(null);
