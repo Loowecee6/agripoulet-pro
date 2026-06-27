@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { AppData, User, UserRole } from './types';
-import { storageService } from './services/storageService';
 import { useAuth } from './components/common/AuthProvider';
 import { LoginScreen } from './components/common/LoginScreen';
 import { Header } from './components/common/Header';
@@ -21,7 +20,7 @@ import { UserManagement } from './components/common/UserManagement';
 import { ProductionGoals } from './components/common/ProductionGoals';
 import { useCurrentSeason } from './hooks/useCurrentSeason';
 import { useAutoBackup } from './hooks/useAutoBackup';
-import { useSyncManager } from './hooks/useSyncManager';
+import { useRealtimeData } from './hooks/useRealtimeData';
 import { useFCMNotifications } from './hooks/useFCMNotifications';
 import { getUserRole } from './services/userService';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
@@ -31,25 +30,17 @@ const APP_VERSION = 'v6';
 
 export default function App() {
   const { user, signOutUser } = useAuth();
+  const { data: cloudData, isLoading: isInitialLoading, error: syncError, updateData } = useRealtimeData(user);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [data, setData] = useState<AppData | null>(null);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [showNotifSettings, setShowNotifSettings] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
-  const [isForcingSync, setIsForcingSync] = useState(false);
-  const [syncFlash, setSyncFlash] = useState<string | null>(null);
 
-  // ── Vérification version : vide le cache local si le code a changé ──
+  // ── Vérification version ──
   const [versionChecked, setVersionChecked] = useState(false);
   useEffect(() => {
     const cached = localStorage.getItem('app_version');
     if (cached !== APP_VERSION) {
-      try {
-        const req = indexedDB.deleteDatabase('agripoulet-pro');
-        req.onsuccess = () => {};
-        req.onerror = () => {};
-      } catch (_) {}
       localStorage.setItem('app_version', APP_VERSION);
       setTimeout(() => window.location.reload(), 50);
     } else {
@@ -57,152 +48,46 @@ export default function App() {
     }
   }, []);
 
-  // ── Hook : Synchronisation Firestore + Offline Queue ──
+  // ── Connexion réseau ──
   const isOnline = useOnlineStatus();
 
-  const {
-    isSyncing,
-    syncError,
-    hasPendingSync,
-    pendingSyncCount,
-  } = useSyncManager({ user, data, isInitialLoading, isOnline, isAdmin: userRole === 'admin' || userRole === 'super_admin' || userRole === 'manager' });
+  // ── Hook : Auto-backup ──
+  useAutoBackup(cloudData, user, isInitialLoading);
 
-  // ── Hook : Auto-backup automatique ──
-  useAutoBackup(data, user, isInitialLoading);
-
-  // ── Hook : Notifications FCM + Vérifications ──
+  // ── Hook : Notifications FCM ──
   const {
     notificationEvents,
     notifications,
     overdueCount,
-  } = useFCMNotifications({ user, data, isInitialLoading, setData });
+  } = useFCMNotifications({ user, data: cloudData, isInitialLoading, setData: updateData });
 
-  // ── Chargement initial des données + rôle ──
+  // ── Chargement du rôle ──
   useEffect(() => {
     if (!user) {
-      setData(null);
       setUserRole(null);
-      setIsInitialLoading(false);
       return;
     }
-    const init = async () => {
-      setIsInitialLoading(true);
-      try {
-        // Réinitialiser le cache des IDs avant de charger pour un nouvel utilisateur
-        storageService.resetCache();
-
-        const [cloudData, role] = await Promise.all([
-          storageService.loadData(user.uid),
-          getUserRole(user.uid, user.email || undefined, user.displayName || undefined),
-        ]);
-        setData(cloudData);
-        setUserRole(role);
-
-
-      } catch (err) {
-        console.error('Erreur chargement initial:', err);
-      } finally {
-        setIsInitialLoading(false);
-      }
-    };
-    init();
+    getUserRole(user.uid, user.email || undefined, user.displayName || undefined).then(setUserRole).catch(console.error);
   }, [user]);
 
-  // ── Helper console + forceSync avec retour visuel ──
-  const handleForceSync = useCallback(async () => {
-    if (!user || !data || isForcingSync) return;
-    if (!(userRole === 'admin' || userRole === 'super_admin' || userRole === 'manager')) {
-      setSyncFlash('❌ Seuls les admins et managers peuvent forcer la sync');
-      return;
-    }
-    setIsForcingSync(true);
-    try {
-      const ok = await storageService.forceSync(user.uid, data);
-      if (ok) setSyncFlash('✅ Sync réussie');
-      else {
-        try {
-          await storageService.saveData(user.uid, data);
-          setSyncFlash('✅ Sync directe réussie');
-        } catch (directErr: any) {
-          setSyncFlash('❌ ' + (directErr?.message || 'Erreur inconnue'));
-        }
-      }
-    } catch (e: any) {
-      setSyncFlash('❌ ' + (e?.message || 'Erreur'));
-    } finally {
-      setIsForcingSync(false);
-    }
-  }, [user, data, isForcingSync, userRole]);
-
-  useEffect(() => {
-    if (syncFlash) {
-      const t = setTimeout(() => setSyncFlash(null), 2500);
-      return () => clearTimeout(t);
-    }
-  }, [syncFlash]);
-
-  useEffect(() => {
-    if (user && data) {
-      (window as any).forceSyncToServer = handleForceSync;
-    }
-  }, [user, data, handleForceSync]);
-
   // ── État local : saison ──
-  const [seasonOffset, setSeasonOffset] = useState(data?.settings.seasonOffset || 0);
+  const [seasonOffset, setSeasonOffset] = useState(0);
   useEffect(() => {
-    if (data?.settings.seasonOffset !== undefined) {
-      setSeasonOffset(data.settings.seasonOffset);
+    if (cloudData?.settings.seasonOffset !== undefined) {
+      setSeasonOffset(cloudData.settings.seasonOffset);
     }
-  }, [data?.settings.seasonOffset]);
+  }, [cloudData?.settings.seasonOffset]);
   const season = useCurrentSeason(seasonOffset);
 
   // ── Blocage du rendu tant que la version n'est pas vérifiée ──
   if (!versionChecked) return null;
 
-  // ── Helpers ──
-  const updateData = (newData: AppData) => setData(newData);
-
-  const currentUser = user
-    ? ({ id: user.uid, name: user.displayName || user.email || 'Utilisateur', role: userRole || 'viewer' } as User)
-    : null;
-
-  const userPermissions = currentUser ? getUserPermissions(currentUser.role) : [];
-
-  const updateNotificationPrefs = (prefs: AppData['settings']['notifications']) => {
-    if (!data) return;
-    setData({
-      ...data,
-      settings: {
-        ...data.settings,
-        notifications: prefs,
-      },
-    });
-  };
-
-  const handleSeasonOffsetChange = (newOffset: number) => {
-    const clamped = Math.max(-90, Math.min(90, newOffset));
-    setSeasonOffset(clamped);
-    if (!data) return;
-    setData({
-      ...data,
-      settings: {
-        ...data.settings,
-        seasonOffset: clamped,
-      },
-    });
-  };
-
-  const toggleDarkMode = () => {
-    if (!data) return;
-    setData({ ...data, settings: { ...data.settings, darkMode: !data.settings.darkMode } });
-  };
-
-  // ── États d'interface ──
-  if (isInitialLoading) {
+  // ── Écran de chargement initial ──
+  if (isInitialLoading && !cloudData) {
     return (
       <div className="min-h-screen bg-orange-50 flex flex-col items-center justify-center p-6">
         <Loader2 className="w-12 h-12 text-orange-600 animate-spin mb-4" />
-        <p className="text-orange-900 font-bold animate-pulse">Initialisation du Cloud...</p>
+        <p className="text-orange-900 font-bold animate-pulse">Connexion au Cloud...</p>
       </div>
     );
   }
@@ -220,73 +105,101 @@ export default function App() {
     );
   }
 
+  // ── Helpers ──
+  const currentUser = user
+    ? ({ id: user.uid, name: user.displayName || user.email || 'Utilisateur', role: userRole || 'viewer' } as User)
+    : null;
+
+  const userPermissions = currentUser ? getUserPermissions(currentUser.role) : [];
+
+  const updateNotificationPrefs = (prefs: AppData['settings']['notifications']) => {
+    if (!cloudData) return;
+    updateData({
+      ...cloudData,
+      settings: {
+        ...cloudData.settings,
+        notifications: prefs,
+      },
+    });
+  };
+
+  const handleSeasonOffsetChange = (newOffset: number) => {
+    const clamped = Math.max(-90, Math.min(90, newOffset));
+    setSeasonOffset(clamped);
+    if (!cloudData) return;
+    updateData({
+      ...cloudData,
+      settings: {
+        ...cloudData.settings,
+        seasonOffset: clamped,
+      },
+    });
+  };
+
+  const toggleDarkMode = () => {
+    if (!cloudData) return;
+    updateData({ ...cloudData, settings: { ...cloudData.settings, darkMode: !cloudData.settings.darkMode } });
+  };
+
   return (
     <ErrorBoundary>
       <div
-        className={`min-h-screen ${data?.settings.darkMode ? 'bg-gray-900' : 'bg-gray-50'} max-w-md mx-auto relative shadow-2xl flex flex-col ${data?.settings.darkMode ? 'border-gray-800' : 'border-x border-gray-100'} font-sans selection:bg-orange-100`}
+        className={`min-h-screen ${cloudData?.settings.darkMode ? 'bg-gray-900' : 'bg-gray-50'} max-w-md mx-auto relative shadow-2xl flex flex-col ${cloudData?.settings.darkMode ? 'border-gray-800' : 'border-x border-gray-100'} font-sans selection:bg-orange-100`}
       >
-        {syncFlash && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-2xl z-50 transition-all duration-300">
-            {syncFlash}
-          </div>
-        )}
         <Header
           user={currentUser}
           onLogout={signOutUser}
           notifications={notifications}
           overdueCount={overdueCount}
           notificationEvents={notificationEvents}
-          isSyncing={isSyncing}
+          isSyncing={false}
           isOnline={isOnline}
-          hasPendingSync={hasPendingSync}
-          pendingSyncCount={pendingSyncCount}
+          hasPendingSync={false}
+          pendingSyncCount={0}
           syncError={syncError}
           onOpenNotifSettings={() => setShowNotifSettings(true)}
-          darkMode={data?.settings.darkMode}
+          darkMode={cloudData?.settings.darkMode}
           onToggleDarkMode={toggleDarkMode}
           onOpenUserManagement={() => setShowUserManagement(true)}
           currentSeason={season.active || undefined}
           seasonWarning={season.data?.warning || null}
           onSeasonOffsetChange={handleSeasonOffsetChange}
           seasonOffset={seasonOffset}
-          onForceSync={handleForceSync}
-          isForcingSync={isForcingSync}
         />
         <main className="flex-1 p-4 pb-24 overflow-y-auto scroll-smooth">
-          {data && activeTab === 'dashboard' && <DashboardView data={data} onTabChange={setActiveTab} permissions={userPermissions} />}
-          {data && activeTab === 'dashboard' && <ProductionGoals data={data} />}
-          {data && activeTab === 'production' && userPermissions.includes('production.view') && (
-            <ProductionView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
+          {cloudData && activeTab === 'dashboard' && <DashboardView data={cloudData} onTabChange={setActiveTab} permissions={userPermissions} />}
+          {cloudData && activeTab === 'dashboard' && <ProductionGoals data={cloudData} />}
+          {cloudData && activeTab === 'production' && userPermissions.includes('production.view') && (
+            <ProductionView data={cloudData} setData={updateData} user={currentUser} permissions={userPermissions} />
           )}
-          {data && activeTab === 'stock' && userPermissions.includes('stock.view') && (
-            <StockView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
+          {cloudData && activeTab === 'stock' && userPermissions.includes('stock.view') && (
+            <StockView data={cloudData} setData={updateData} user={currentUser} permissions={userPermissions} />
           )}
-          {data && activeTab === 'ventes' && userPermissions.includes('ventes.view') && (
-            <VentesView data={data} setData={updateData} onTabChange={setActiveTab} permissions={userPermissions} />
+          {cloudData && activeTab === 'ventes' && userPermissions.includes('ventes.view') && (
+            <VentesView data={cloudData} setData={updateData} onTabChange={setActiveTab} permissions={userPermissions} />
           )}
-          {data && activeTab === 'clients' && userPermissions.includes('clients.view') && (
-            <ClientsView data={data} setData={updateData} />
+          {cloudData && activeTab === 'clients' && userPermissions.includes('clients.view') && (
+            <ClientsView data={cloudData} setData={updateData} />
           )}
-          {data && activeTab === 'echeances' && userPermissions.includes('ventes.view') && (
-            <EcheancesView data={data} />
+          {cloudData && activeTab === 'echeances' && userPermissions.includes('ventes.view') && (
+            <EcheancesView data={cloudData} />
           )}
-          {data && activeTab === 'reservations' && (userPermissions.includes('reservations.create') || userPermissions.includes('reservations.edit')) && (
-            <ReservationView data={data} setData={updateData} />
+          {cloudData && activeTab === 'reservations' && (userPermissions.includes('reservations.create') || userPermissions.includes('reservations.edit')) && (
+            <ReservationView data={cloudData} setData={updateData} />
           )}
-          {data && activeTab === 'rapport' && userPermissions.includes('rapports.view') && (
-            <RapportView data={data} setData={updateData} user={currentUser} permissions={userPermissions} />
+          {cloudData && activeTab === 'rapport' && userPermissions.includes('rapports.view') && (
+            <RapportView data={cloudData} setData={updateData} user={currentUser} permissions={userPermissions} />
           )}
-          {data && activeTab === 'facturier' && userPermissions.includes('ventes.facturier') && (
-            <FacturierView data={data} setData={updateData} onBack={() => setActiveTab('dashboard')} darkMode={data.settings.darkMode} />
+          {cloudData && activeTab === 'facturier' && userPermissions.includes('ventes.facturier') && (
+            <FacturierView data={cloudData} setData={updateData} onBack={() => setActiveTab('dashboard')} darkMode={cloudData.settings.darkMode} />
           )}
         </main>
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} permissions={userPermissions} />
 
-        {/* Notification Settings Modal */}
-        {data && (
+        {cloudData && (
           <NotificationSettings
             prefs={
-              data.settings.notifications || {
+              cloudData.settings.notifications || {
                 enabled: true,
                 vaccinationReminders: true,
                 mortalityAlerts: true,
@@ -299,11 +212,10 @@ export default function App() {
           />
         )}
 
-        {/* User Management Modal */}
-        {data && currentUser && (
+        {cloudData && currentUser && (
           <UserManagement
-            data={data}
-            setData={setData}
+            data={cloudData}
+            setData={updateData}
             currentUser={currentUser}
             isOpen={showUserManagement}
             onClose={() => setShowUserManagement(false)}
