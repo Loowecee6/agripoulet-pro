@@ -42,7 +42,7 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
     { id: '1', designation: 'Poulet de chair', qte: 1, prixU: 4000, poids: 1.5 }
   ]);
   const [activeItemIndex, setActiveItemIndex] = useState<number>(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // --- Autocomplete / Client select handler ---
   useEffect(() => {
@@ -313,13 +313,13 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
   }, []);
 
   const handleSaveVente = useCallback(() => {
-    if (isSubmitting) return false;
+    if (isSubmittingRef.current) return false;
     if (items.length === 0 || totalFacture <= 0) {
       addToast('Facture vide. Ajoutez au moins une ligne.', 'warning');
       return false;
     }
 
-    setIsSubmitting(true);
+    isSubmittingRef.current = true;
     try {
       // 1. Find or create client
       const telDigits = clientTel.replace(/\D/g, '');
@@ -368,9 +368,9 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
       addToast(`Vente enregistrée ! Stock mis à jour (-${totalQte} poulets)`, 'success');
       return true;
     } finally {
-      setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
-  }, [items, totalFacture, clientNom, clientTel, isDeferred, dateEcheance, dateFacture, data, setData, addToast, resetForm, isSubmitting]);
+  }, [items, totalFacture, clientNom, clientTel, isDeferred, dateEcheance, dateFacture, data, setData, addToast, resetForm]);
 
   const handleShareWhatsApp = () => {
     const ok = handleSaveVente();
@@ -741,8 +741,7 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
 
             <button 
               onClick={handleSaveVente}
-              disabled={isSubmitting}
-              className={`col-span-2 p-5 ${isSubmitting ? 'bg-orange-400 cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-700'} text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-100 dark:shadow-none active:scale-95 transition-all`}
+              className="col-span-2 p-5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-100 dark:shadow-none active:scale-95 transition-all"
             >
               <Check className="w-4 h-4 shrink-0" />
               Enregistrer la vente
@@ -750,8 +749,7 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
 
             <button 
               onClick={handleShareWhatsApp}
-              disabled={isSubmitting}
-              className={`col-span-2 p-5 ${isSubmitting ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-green-100 dark:shadow-none active:scale-95 transition-all`}
+              className="col-span-2 p-5 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-green-100 dark:shadow-none active:scale-95 transition-all"
             >
               <Send className="w-4 h-4 shrink-0" />
               Envoyer par WhatsApp

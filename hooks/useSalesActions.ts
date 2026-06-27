@@ -4,7 +4,7 @@
  * Extraits de VentesView.tsx pour améliorer la maintenabilité
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { AppData, Sale, Chicken, StockBatch, Payment } from '../types';
 import { getRemainingBalance, getTotalPayments, isSalePaid } from '../utils/creditHelpers';
 import {
@@ -34,7 +34,7 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
   const [search, setSearch] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState<string>('');
-  const [isSubmittingSale, setIsSubmittingSale] = useState(false);
+  const isSubmittingSaleRef = useRef(false);
 
   // État pour la création d'une vente
   const [selectedBatchId, setSelectedBatchId] = useState<string>('');
@@ -105,7 +105,7 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
   const handleAddSale = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      if (isSubmittingSale) return;
+      if (isSubmittingSaleRef.current) return;
       if (basket.length === 0) return addToast('Votre panier est vide.', 'error');
 
       const f = new FormData(e.currentTarget);
@@ -113,9 +113,8 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
       const client = data.clients.find(c => c.id === clientId);
       if (!client) return addToast('Veuillez sélectionner un client.', 'error');
 
-      setIsSubmittingSale(true);
+      isSubmittingSaleRef.current = true;
       try {
-        // Calculer la quantité totale (individuels + groupes)
         const totalQte = basket.reduce((acc, p) => acc + ((p as any).quantiteGroupe || 1), 0);
         const basketIds = basket.filter(p => !(p as any).isGroup).map(p => p.id);
         const total = basket.reduce((acc, p) => acc + p.prix, 0);
@@ -124,7 +123,7 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
 
         if (isCredit) {
           const error = validateCredit(dueDateRaw);
-          if (error) { setIsSubmittingSale(false); return addToast(error, 'error'); }
+          if (error) { isSubmittingSaleRef.current = false; return addToast(error, 'error'); }
         }
 
         const { updated: updatedStock, venduIds } = deductStockByQuantity(data.stockBatches, totalQte);
@@ -163,10 +162,10 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
         setQteVente(1);
         addToast('Vente enregistrée avec succès', 'success');
       } finally {
-        setIsSubmittingSale(false);
+        isSubmittingSaleRef.current = false;
       }
     },
-    [basket, data, setData, addToast, isSubmittingSale]
+    [basket, data, setData, addToast]
   );
 
   const handleDeleteSale = useCallback(
