@@ -108,9 +108,7 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
               <BarChart3 className="w-5 h-5" />
             </button>
           )}
-          {can('production.create') && (
-            <button onClick={() => setIsAddModalOpen(true)} className="bg-orange-600 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-transform"><Plus /></button>
-          )}
+          <button onClick={() => setIsAddModalOpen(true)} className="bg-orange-600 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-transform" title="Créer une bande"><Plus /></button>
         </div>
       </div>
 
