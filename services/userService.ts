@@ -30,10 +30,19 @@ export async function getUserRole(uid: string, email?: string, displayName?: str
       const updates: Record<string, unknown> = {};
       if (email && email !== data.email) updates.email = email;
       if (displayName && displayName !== data.displayName) updates.displayName = displayName;
+
+      // Vérifier si l'email correspond à un admin connu → upgrade automatique du rôle
+      const isAdminEmail = email && ['loowecee6@gmail.com', 'destigny@gmail.com', 'admin@agripoulet-pro.com'].includes(email.toLowerCase());
+      const currentRole = (data.role as UserRole) || DEFAULT_ROLE;
+      const targetRole: UserRole = isAdminEmail ? 'admin' : currentRole;
+      if (currentRole !== targetRole) {
+        updates.role = targetRole;
+      }
+
       if (Object.keys(updates).length > 0) {
         await setDoc(userDoc, { ...updates, updatedAt: serverTimestamp() }, { merge: true });
       }
-      return (data.role as UserRole) || DEFAULT_ROLE;
+      return targetRole;
     }
     // Document non trouvé → créer avec rôle par défaut
     const isAdminEmail = email && ['loowecee6@gmail.com', 'destigny@gmail.com', 'admin@agripoulet-pro.com'].includes(email.toLowerCase());
