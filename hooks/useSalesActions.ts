@@ -265,22 +265,26 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
       if (!editingSale) return;
 
       const f = new FormData(e.currentTarget);
+      const newNom = (f.get('clientNom') as string || '').trim();
+      const newTel = (f.get('clientTel') as string || '').trim();
 
-      // Client
-      let clientId = f.get('clientId') as string;
-      let clientNom = f.get('clientNomEdit') as string;
-      if (!clientNom?.trim()) clientNom = editingSale.clientNom;
+      if (!newNom) return addToast('Le nom du client est requis.', 'error');
 
-      // Si un client existant est sélectionné, utiliser son ID et son nom
-      const client = data.clients.find(c => c.id === clientId);
+      // Chercher un client existant par nom (insensible à la casse)
+      let client = data.clients.find(c => c.nom.toLowerCase() === newNom.toLowerCase()) || null;
+      let clientId: string;
+
       if (client) {
+        // Client existant : mettre à jour le tel si fourni
         clientId = client.id;
-        clientNom = client.nom;
-      } else if (clientId && clientId !== 'keep') {
-        return addToast('Client invalide', 'error');
+        if (newTel && client.tel !== newTel) {
+          const updatedClient = { ...client, tel: newTel };
+          client = updatedClient;
+        }
       } else {
-        // keep: garder l'ID et le nom actuels (ou celui saisi)
-        clientId = editingSale.clientId;
+        // Nouveau client : créer une fiche
+        clientId = crypto.randomUUID();
+        client = { id: clientId, nom: newNom, tel: newTel, adresse: '' };
       }
 
       const total = Number(f.get('total')) || editingSale.total;
@@ -303,10 +307,16 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
         } catch { /* keep original */ }
       }
 
+      // Vérifier si le client est nouveau ou mis à jour → l'ajouter/mettre à jour dans la base
+      const clientExists = data.clients.find(c => c.id === clientId);
+      const updatedClients = clientExists
+        ? data.clients.map(c => c.id === clientId ? { ...c, nom: newNom, tel: newTel } : c)
+        : [...data.clients, client];
+
       const updated: Sale = {
         ...editingSale,
         clientId,
-        clientNom: clientNom.trim(),
+        clientNom: newNom,
         total,
         isCredit,
         dueDate: isCredit ? dueDateRaw : undefined,
@@ -315,9 +325,13 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
         factureItems,
       };
 
-      setData({ ...data, sales: data.sales.map(s => (s.id === editingSale.id ? updated : s)) });
+      setData({
+        ...data,
+        clients: updatedClients,
+        sales: data.sales.map(s => (s.id === editingSale.id ? updated : s)),
+      });
       setEditingSale(null);
-      addToast('Vente modifiée', 'success');
+      addToast('Vente modifiée' + (!clientExists ? ' — Nouveau client créé ✓' : ''), 'success');
     },
     [data, editingSale, setData, addToast]
   );

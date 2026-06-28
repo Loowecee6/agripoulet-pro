@@ -911,17 +911,14 @@ export const VentesView = ({ data, setData, onTabChange, permissions = [] }: Ven
 
           return (
             <form onSubmit={handleEditSubmit} className="space-y-4">
-              {/* Client */}
+              {/* Client — simple champ texte, crée une fiche si le nom change */}
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Client</label>
-                <select name="clientId" defaultValue={editingSale.clientId || 'keep'} className="w-full p-3 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm appearance-none dark:border-gray-600 dark:text-white">
-                  <option value="keep">— Garder le client actuel ({editingSale.clientNom}) —</option>
-                  {data.clients.map(c => <option key={c.id} value={c.id}>{c.nom} {c.tel ? `(${c.tel})` : ''}</option>)}
-                </select>
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Nom du client</label>
+                <input name="clientNom" type="text" defaultValue={editingSale.clientNom} required placeholder="Nom du client" className="w-full p-3 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm dark:border-gray-600 dark:text-white" />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Nom client (surcharge)</label>
-                <input name="clientNomEdit" type="text" defaultValue={editingSale.clientNom} placeholder="Modifier le nom affiché" className="w-full p-3 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm dark:border-gray-600 dark:text-white" />
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Téléphone (optionnel)</label>
+                <input name="clientTel" type="tel" defaultValue={data.clients.find(c => c.id === editingSale.clientId)?.tel || ''} placeholder="Ex: 771234567" className="w-full p-3 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm dark:border-gray-600 dark:text-white" />
               </div>
 
               {/* Date */}
