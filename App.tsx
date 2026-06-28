@@ -26,6 +26,7 @@ import { getUserRole } from './services/userService';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { exportFullBackup } from './utils/exportXLS';
+import { calculateTotalSoldFromSales } from './domain/sales';
 
 const APP_VERSION = 'v6';
 
@@ -160,8 +161,16 @@ export default function App() {
               alert('Aucun stock à réparer.');
               return;
             }
-            const total = cloudData.stockBatches.reduce((s, b) => s + (b.quantite || 0) + b.poulets.filter(p => !p.vendu).length, 0);
-            if (!confirm(`Le stock total est de ${total} poulets. Remettre à 88 ? Les lots en trop seront supprimés.`)) return;
+            const stockActuel = cloudData.stockBatches.reduce((s, b) => s + (b.quantite || 0) + b.poulets.filter(p => !p.vendu).length, 0);
+            const totalVendus = calculateTotalSoldFromSales(cloudData.sales);
+            const stockFinal = Math.max(0, stockActuel - totalVendus);
+            if (!confirm(
+              `📊 Stock actuel : ${stockActuel} poulets\n` +
+              `📋 Ventes enregistrées : ${totalVendus} poulets\n` +
+              `🎯 Stock après correction : ${stockFinal} poulets\n\n` +
+              `Les lots en trop seront fusionnés en 1 lot. Les ${totalVendus} poulets déjà vendus\n` +
+              `seront déduits (vos factures existantes sont conservées).`
+            )) return;
             const firstBatch = cloudData.stockBatches[0];
             const fixedBatches = [{
               ...firstBatch,
@@ -171,10 +180,14 @@ export default function App() {
               prixKg: firstBatch.prixKg || 0,
               coutInitial: firstBatch.coutInitial || 0,
               isFinalized: firstBatch.isFinalized ?? false,
-              quantite: 88,
+              quantite: stockFinal,
             }];
             updateData({ ...cloudData, stockBatches: fixedBatches });
-            alert('✅ Stock réparé : 1 lot avec 88 poulets.');
+            alert(
+              `✅ Stock synchronisé avec les ventes !\n\n` +
+              `📋 ${totalVendus} poulets vendus (factures conservées)\n` +
+              `🐔 ${stockFinal} poulets restants en stock`
+            );
           } : undefined}
           syncError={syncError}
           onOpenNotifSettings={() => setShowNotifSettings(true)}

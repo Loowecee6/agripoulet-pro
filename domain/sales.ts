@@ -179,6 +179,24 @@ export function markChickensAsUnsold(
 }
 
 /**
+ * Calcule le nombre total de poulets vendus à partir des factures existantes.
+ * Utilise factureItems.qte (pour les lots groupés) ou pouletIds.length (pour les poulets individuels).
+ * Les ventes soft-deleted (via deletedAt) sont exclues.
+ */
+export function calculateTotalSoldFromSales(sales: Sale[]): number {
+  return sales
+    .filter(s => !('deletedAt' in s))
+    .reduce((total, sale) => {
+      if (sale.factureItems?.length) {
+        // Lot groupé : additionner les quantités des lignes de facture
+        return total + sale.factureItems.reduce((sum, item) => sum + item.qte, 0);
+      }
+      // Poulets individuels : compter les IDs
+      return total + (sale.pouletIds?.length || 0);
+    }, 0);
+}
+
+/**
  * Met à jour les paiements d'une vente et détermine si elle est soldée
  */
 export function processPayment(
