@@ -26,7 +26,6 @@ import { getUserRole } from './services/userService';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { exportFullBackup } from './utils/exportXLS';
-import { calculateTotalSoldFromSales } from './domain/sales';
 
 const APP_VERSION = 'v6';
 
@@ -157,34 +156,26 @@ export default function App() {
           isOnline={isOnline}
           onBackup={cloudData ? () => exportFullBackup(cloudData) : undefined}
           onRepairStock={cloudData ? () => {
-            if (cloudData.stockBatches.length === 0) {
-              alert('Aucun stock à réparer.');
-              return;
-            }
-            const stockActuel = cloudData.stockBatches.reduce((s, b) => s + (b.quantite || 0) + b.poulets.filter(p => !p.vendu).length, 0);
-            const totalVendus = calculateTotalSoldFromSales(cloudData.sales);
-            // DIAGNOSTIC : afficher les valeurs pour comprendre le bug
-            const detailVentes = cloudData.sales
-              .filter(s => !('deletedAt' in s))
-              .map(s => `${s.clientNom}: factureItems=${s.factureItems?.map(i => i.qte + '|' + i.prixU).join(',') || 'aucun'} pouletIds=${s.pouletIds?.length || 0}`)
-              .join('\n');
+            const lots = cloudData.stockBatches;
+            if (lots.length === 0) { alert('Aucun stock.'); return; }
+
+            // Diagnostic : afficher tous les lots
+            const diagLots = lots.map((b, i) =>
+              `  Lot ${i + 1}: "${b.nom}" → ${b.quantite || 0} poulets (ID: ${b.id.slice(0, 8)}...)`
+            ).join('\n');
             alert(
-              `📊 DIAGNOSTIC STOCK\n\n` +
-              `Stock actuel: ${stockActuel}\n` +
-              `Total vendus calculé: ${totalVendus}\n` +
-              `Stock final: ${Math.max(0, stockActuel - totalVendus)}\n` +
-              `Nombre de ventes: ${cloudData.sales.filter(s => !('deletedAt' in s)).length}\n\n` +
-              `Détail des ventes:\n${detailVentes}`
+              `📊 LOTS DE STOCK ACTUELS\n\n${diagLots}\n\n` +
+              `👉 Le 1er lot sera conservé, les autres supprimés.`
             );
+
             if (!confirm(
-              `📊 Stock actuel : ${stockActuel} poulets\n` +
-              `📋 Ventes enregistrées : ${totalVendus} poulets\n` +
-              `🎯 Stock après correction : ${Math.max(0, stockActuel - totalVendus)} poulets\n\n` +
-              `Confirmer la synchronisation ?`
+              `Garder uniquement le 1er lot ("${lots[0].nom}", ${lots[0].quantite || 0} poulets)\n` +
+              `et supprimer les ${lots.length - 1} autre(s) lot(s) ?`
             )) return;
-            const stockFinal = Math.max(0, stockActuel - totalVendus);
-            const firstBatch = cloudData.stockBatches[0];
-            const fixedBatches = [{
+
+            // Garder seulement le premier lot, supprimer les autres
+            const firstBatch = lots[0];
+            const kept = [{
               ...firstBatch,
               poulets: firstBatch.poulets ?? [],
               typeOrigine: firstBatch.typeOrigine || 'PR',
@@ -192,14 +183,10 @@ export default function App() {
               prixKg: firstBatch.prixKg || 0,
               coutInitial: firstBatch.coutInitial || 0,
               isFinalized: firstBatch.isFinalized ?? false,
-              quantite: stockFinal,
+              quantite: firstBatch.quantite || 0,
             }];
-            updateData({ ...cloudData, stockBatches: fixedBatches });
-            alert(
-              `✅ Stock synchronisé avec les ventes !\n\n` +
-              `📋 ${totalVendus} poulets vendus (factures conservées)\n` +
-              `🐔 ${stockFinal} poulets restants en stock`
-            );
+            updateData({ ...cloudData, stockBatches: kept });
+            alert(`✅ Lot conservé : "${firstBatch.nom}" (${firstBatch.quantite || 0} poulets)\n${lots.length - 1} lot(s) supprimé(s).`);
           } : undefined}
           syncError={syncError}
           onOpenNotifSettings={() => setShowNotifSettings(true)}
