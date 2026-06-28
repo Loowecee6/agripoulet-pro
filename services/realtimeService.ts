@@ -115,6 +115,11 @@ export function writeChanges(oldData: AppData | null, newData: AppData): void {
   }
 
   if (ops > 0) {
-    batch.commit().catch(err => console.error('[realtime] Batch write failed:', err));
+    batch.commit().catch(err => {
+      console.error('[realtime] Batch write failed:', err);
+      // Afficher l'erreur à l'utilisateur pour le débogage
+      const msg = err?.message || String(err || 'Erreur inconnue');
+      alert('❌ Écriture Firestore échouée:\n' + msg);
+    });
   }
 }
