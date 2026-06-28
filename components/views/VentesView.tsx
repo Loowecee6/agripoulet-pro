@@ -874,40 +874,107 @@ export const VentesView = ({ data, setData, onTabChange, permissions = [] }: Ven
          )}
       </Modal>
 
-      {/* Modal Modifier Vente */}
+      {/* Modal Modifier Vente — version complète */}
       <Modal isOpen={!!editingSale} onClose={() => setEditingSale(null)} title="Modifier la Vente">
-        {editingSale && (
-          <form onSubmit={handleEditSale} className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Client *</label>
-              <select name="clientId" required defaultValue={editingSale.clientId} className="w-full p-4 border rounded-2xl bg-gray-50 outline-none text-sm appearance-none">
-                <option value="">Choisir un client</option>
-                {data.clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Total (Frs)</label>
-              <input name="total" type="number" min="0" defaultValue={editingSale.total} className="w-full p-4 border rounded-2xl bg-gray-50 outline-none" />
-            </div>
-            <div className="p-4 bg-white rounded-3xl space-y-3 border border-gray-100 shadow-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-gray-700">Vente à crédit ?</span>
-                <input name="isCredit" type="checkbox" defaultChecked={editingSale.isCredit} className="w-6 h-6 accent-orange-600" />
+        {editingSale && (() => {
+          // Préparer les items d'édition
+          const editItems: { id: string; designation: string; qte: number; prixU: number; poids: number }[] =
+            (editingSale.factureItems || []).map((fi, i) => ({
+              id: `edit-${i}`,
+              designation: fi.designation || 'Poulet de chair',
+              qte: fi.qte,
+              prixU: fi.prixU,
+              poids: fi.poids || 0,
+            }));
+          if (editItems.length === 0) {
+            editItems.push({ id: 'edit-0', designation: 'Poulet de chair', qte: editingSale.pouletIds.length || 1, prixU: Math.round(editingSale.total / Math.max(1, editingSale.pouletIds.length || 1)), poids: 0 });
+          }
+
+          const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+            e.preventDefault();
+            // Lire les valeurs des inputs visibles et construire le JSON
+            const qtyInputs = e.currentTarget.querySelectorAll<HTMLInputElement>('[data-edit-qty]');
+            const priceInputs = e.currentTarget.querySelectorAll<HTMLInputElement>('[data-edit-price]');
+            const weightInputs = e.currentTarget.querySelectorAll<HTMLInputElement>('[data-edit-weight]');
+            const items = Array.from(qtyInputs).map((el, i) => ({
+              designation: 'Poulet de chair',
+              qte: parseInt(el.value) || 1,
+              prixU: parseInt(priceInputs[i]?.value) || 0,
+              poids: parseFloat(weightInputs[i]?.value) || 0,
+            }));
+            // Mettre à jour le champ caché
+            const hiddenInput = e.currentTarget.querySelector<HTMLInputElement>('#factureItemsInput');
+            if (hiddenInput) hiddenInput.value = JSON.stringify(items);
+            // Appeler le handler normal
+            handleEditSale(e);
+          };
+
+          return (
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              {/* Client */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Client</label>
+                <select name="clientId" defaultValue={editingSale.clientId || 'keep'} className="w-full p-3 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm appearance-none dark:border-gray-600 dark:text-white">
+                  <option value="keep">— Garder le client actuel ({editingSale.clientNom}) —</option>
+                  {data.clients.map(c => <option key={c.id} value={c.id}>{c.nom} {c.tel ? `(${c.tel})` : ''}</option>)}
+                </select>
               </div>
               <div className="space-y-1">
-                <label className="text-[9px] text-gray-400 font-black ml-1 uppercase">Date d'échéance (max 15 jours)</label>
-                <input name="dueDate" type="date" min={new Date().toISOString().split('T')[0]} max={new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0]} defaultValue={editingSale.dueDate || ''} className="w-full p-3 border rounded-xl text-sm outline-none bg-gray-50" />
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Nom client (surcharge)</label>
+                <input name="clientNomEdit" type="text" defaultValue={editingSale.clientNom} placeholder="Modifier le nom affiché" className="w-full p-3 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm dark:border-gray-600 dark:text-white" />
               </div>
-              {editingSale.isCredit && (
+
+              {/* Date */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Date de la vente</label>
+                <input name="dateVente" type="date" defaultValue={editingSale.dateVente.split('T')[0]} className="w-full p-3 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm dark:border-gray-600 dark:text-white" />
+              </div>
+
+              {/* Total */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Total (Frs)</label>
+                <input name="total" type="number" min="0" defaultValue={editingSale.total} className="w-full p-3 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm dark:border-gray-600 dark:text-white" />
+              </div>
+
+              {/* Crédit & Paiement */}
+              <div className="p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-gray-700">Payé ?</span>
-                  <input name="isPaid" type="checkbox" defaultChecked={editingSale.isPaid} className="w-6 h-6 accent-green-600" />
+                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Vente à crédit</span>
+                  <input name="isCredit" type="checkbox" defaultChecked={editingSale.isCredit} className="w-5 h-5 accent-orange-600" />
                 </div>
-              )}
-            </div>
-            <button type="submit" className="w-full bg-gray-900 text-white p-4 rounded-2xl font-bold shadow-lg">Enregistrer</button>
-          </form>
-        )}
+                <div className="space-y-1">
+                  <label className="text-[9px] text-gray-400 font-black uppercase ml-1">Date d'échéance</label>
+                  <input name="dueDate" type="date" defaultValue={editingSale.dueDate || ''} className="w-full p-2.5 border rounded-xl outline-none text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Payé</span>
+                  <input name="isPaid" type="checkbox" defaultChecked={editingSale.isPaid} className="w-5 h-5 accent-green-600" />
+                </div>
+              </div>
+
+              {/* Lignes de facture */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Lignes de facture</label>
+                <div className="space-y-2">
+                  {editItems.map((item, idx) => (
+                    <div key={item.id} className="grid grid-cols-4 gap-1 p-2 bg-gray-50 dark:bg-gray-800 rounded-xl border dark:border-gray-700">
+                      <span className="text-[8px] text-gray-400 truncate col-span-4">{item.designation}</span>
+                      <input type="number" defaultValue={item.qte} min="1" data-edit-qty={idx} placeholder="Qté" className="w-full p-1.5 border rounded-lg text-xs text-center bg-white dark:bg-gray-700 dark:text-white dark:border-gray-600" />
+                      <input type="number" defaultValue={item.prixU} min="0" data-edit-price={idx} placeholder="Prix U" className="w-full p-1.5 border rounded-lg text-xs text-center bg-white dark:bg-gray-700 dark:text-white dark:border-gray-600" />
+                      <input type="number" defaultValue={item.poids} min="0" step="0.1" data-edit-weight={idx} placeholder="Poids" className="w-full p-1.5 border rounded-lg text-xs text-center bg-white dark:bg-gray-700 dark:text-white dark:border-gray-600" />
+                      <span className="text-xs font-bold text-orange-600 flex items-center justify-center">{item.qte * item.prixU} F</span>
+                    </div>
+                  ))}
+                </div>
+                <input type="hidden" name="factureItems" id="factureItemsInput" value={JSON.stringify(editItems)} />
+              </div>
+
+              <button type="submit" className="w-full bg-gray-900 dark:bg-orange-600 text-white p-4 rounded-2xl font-black uppercase tracking-widest shadow-lg active:scale-95 transition-transform">
+                Enregistrer les modifications
+              </button>
+            </form>
+          );
+        })()}
       </Modal>
 
       {/* Modal Ajout de Paiement */}

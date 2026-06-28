@@ -321,9 +321,15 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
 
     isSubmittingRef.current = true;
     try {
-      // 1. Find or create client
-      const telDigits = clientTel.replace(/\D/g, '');
-      let client = data.clients.find(c => c.tel.replace(/\D/g, '') === telDigits) || null;
+      // 1. Find or create client (recherche par tel si renseigné, sinon par nom)
+      let client = null;
+      if (clientTel.trim()) {
+        const telDigits = clientTel.replace(/\D/g, '');
+        client = data.clients.find(c => c.tel.replace(/\D/g, '') === telDigits) || null;
+      } else if (clientNom.trim()) {
+        // Quand le téléphone est vide, chercher par nom pour éviter les confusions
+        client = data.clients.find(c => c.nom.toLowerCase() === clientNom.trim().toLowerCase()) || null;
+      }
       if (!client && clientNom.trim()) {
         client = {
           id: crypto.randomUUID(),

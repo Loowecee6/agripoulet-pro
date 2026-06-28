@@ -265,26 +265,54 @@ export function useSalesActions({ data, setData, addToast }: UseSalesActionsOpti
       if (!editingSale) return;
 
       const f = new FormData(e.currentTarget);
-      const clientId = f.get('clientId') as string;
-      const client = data.clients.find(c => c.id === clientId);
-      if (!client) return addToast('Client invalide', 'error');
 
+      // Client
+      let clientId = f.get('clientId') as string;
+      let clientNom = f.get('clientNomEdit') as string;
+      if (!clientNom?.trim()) clientNom = editingSale.clientNom;
+
+      // Si un client existant est sélectionné, utiliser son ID et son nom
+      const client = data.clients.find(c => c.id === clientId);
+      if (client) {
+        clientId = client.id;
+        clientNom = client.nom;
+      } else if (clientId && clientId !== 'keep') {
+        return addToast('Client invalide', 'error');
+      } else {
+        // keep: garder l'ID et le nom actuels (ou celui saisi)
+        clientId = editingSale.clientId;
+      }
+
+      const total = Number(f.get('total')) || editingSale.total;
       const isCredit = f.get('isCredit') === 'on';
       const dueDateRaw = f.get('dueDate') as string;
+      const isPaid = f.get('isPaid') === 'on';
+      const dateVente = (f.get('dateVente') as string) || editingSale.dateVente.split('T')[0];
 
       if (isCredit) {
         const error = validateCredit(dueDateRaw);
         if (error) return addToast(error, 'error');
       }
 
+      // Lire les factureItems édités depuis les champs cachés
+      let factureItems = editingSale.factureItems;
+      const itemsJson = f.get('factureItems') as string;
+      if (itemsJson) {
+        try {
+          factureItems = JSON.parse(itemsJson);
+        } catch { /* keep original */ }
+      }
+
       const updated: Sale = {
         ...editingSale,
-        clientId: client.id,
-        clientNom: client.nom,
-        total: Number(f.get('total')) || editingSale.total,
+        clientId,
+        clientNom: clientNom.trim(),
+        total,
         isCredit,
         dueDate: isCredit ? dueDateRaw : undefined,
-        isPaid: !isCredit || f.get('isPaid') === 'on',
+        isPaid,
+        dateVente: new Date(dateVente).toISOString(),
+        factureItems,
       };
 
       setData({ ...data, sales: data.sales.map(s => (s.id === editingSale.id ? updated : s)) });
