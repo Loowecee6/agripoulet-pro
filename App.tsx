@@ -26,6 +26,8 @@ import { getUserRole } from './services/userService';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { exportFullBackup } from './utils/exportXLS';
+import { db } from './services/firebaseConfig';
+import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 const APP_VERSION = 'v6';
 
@@ -155,7 +157,7 @@ export default function App() {
           notificationEvents={notificationEvents}
           isOnline={isOnline}
           onBackup={cloudData ? () => exportFullBackup(cloudData) : undefined}
-          onRepairStock={cloudData ? () => {
+          onRepairStock={cloudData ? async () => {
             const lots = cloudData.stockBatches;
             if (lots.length === 0) { alert('Aucun stock.'); return; }
 
@@ -173,9 +175,8 @@ export default function App() {
               `et supprimer les ${lots.length - 1} autre(s) lot(s) ?`
             )) return;
 
-            // Garder seulement le premier lot, supprimer les autres
             const firstBatch = lots[0];
-            const kept = [{
+            const kept = {
               ...firstBatch,
               poulets: firstBatch.poulets ?? [],
               typeOrigine: firstBatch.typeOrigine || 'PR',
@@ -184,9 +185,27 @@ export default function App() {
               coutInitial: firstBatch.coutInitial || 0,
               isFinalized: firstBatch.isFinalized ?? false,
               quantite: firstBatch.quantite || 0,
-            }];
-            updateData({ ...cloudData, stockBatches: kept });
-            alert(`✅ Lot conservé : "${firstBatch.nom}" (${firstBatch.quantite || 0} poulets)\n${lots.length - 1} lot(s) supprimé(s).`);
+            };
+
+            // Mise à jour DIRECTE de Firestore (contourne writeChanges)
+            try {
+              // 1. Sauvegarder le premier lot (complet avec tous les champs requis)
+              await setDoc(doc(db, 'stockBatches', firstBatch.id), kept);
+              // 2. Supprimer les autres lots
+              for (let i = 1; i < lots.length; i++) {
+                await deleteDoc(doc(db, 'stockBatches', lots[i].id));
+              }
+              // 3. Mettre à jour l'état local
+              updateData({ ...cloudData, stockBatches: [kept] });
+              alert(`✅ Opération réussie !\n\nLot conservé : "${firstBatch.nom}" (${kept.quantite} poulets)\n${lots.length - 1} lot(s) supprimé(s).\n\nLes modifications sont persistées dans Firestore.`);
+            } catch (e: any) {
+              alert(
+                `❌ ÉCHEC DE L'ÉCRITURE FIRESTORE\n\n` +
+                `Erreur: ${e?.message || e || 'Erreur inconnue'}\n\n` +
+                `Code: ${e?.code || 'N/A'}\n\n` +
+                `Veuillez copier ce message et me le transmettre pour diagnostic.`
+              );
+            }
           } : undefined}
           syncError={syncError}
           onOpenNotifSettings={() => setShowNotifSettings(true)}
