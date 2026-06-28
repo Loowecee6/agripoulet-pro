@@ -119,8 +119,17 @@ export function deductStockByQuantity(
     if (b.quantite && b.quantite > 0) {
       const pris = Math.min(restant, b.quantite);
       restant -= pris;
-      // Garantir les champs requis par les règles Firestore (poulets, typeOrigine)
-      return { ...b, poulets: b.poulets ?? [], typeOrigine: b.typeOrigine || 'PR', quantite: b.quantite - pris };
+      return {
+        ...b,
+        // Garantir tous les champs requis par les règles Firestore
+        poulets: b.poulets ?? [],
+        typeOrigine: b.typeOrigine || 'PR',
+        lettre: b.lettre || '',
+        prixKg: b.prixKg || 0,
+        coutInitial: b.coutInitial || 0,
+        isFinalized: b.isFinalized ?? false,
+        quantite: b.quantite - pris,
+      };
     }
 
     // 2. Poulets individuels : marquer comme vendu
@@ -129,7 +138,7 @@ export function deductStockByQuantity(
 
     const aPrendre = Math.min(restant, nonVendus);
     let compteur = 0;
-    const nouveauPoulets = b.poulets.map(p => {
+    const nouveauPoulets = (b.poulets || []).map(p => {
       if (compteur >= aPrendre) return p;
       if (p.vendu) return p;
       compteur++;
@@ -138,7 +147,15 @@ export function deductStockByQuantity(
       return { ...p, vendu: true };
     });
 
-    return { ...b, poulets: nouveauPoulets };
+    return {
+      ...b,
+      poulets: nouveauPoulets,
+      typeOrigine: b.typeOrigine || 'PR',
+      lettre: b.lettre || '',
+      prixKg: b.prixKg || 0,
+      coutInitial: b.coutInitial || 0,
+      isFinalized: b.isFinalized ?? false,
+    };
   });
 
   return { updated, venduIds };
