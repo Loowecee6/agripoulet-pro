@@ -189,7 +189,8 @@ export function calculateTotalSoldFromSales(sales: Sale[]): number {
     .reduce((total, sale) => {
       if (sale.factureItems?.length) {
         // Lot groupé : additionner les quantités des lignes de facture
-        return total + sale.factureItems.reduce((sum, item) => sum + item.qte, 0);
+        // Utiliser || 0 pour éviter NaN si qte est undefined/null
+        return total + sale.factureItems.reduce((sum, item) => sum + (item.qte || 0), 0);
       }
       // Poulets individuels : compter les IDs
       return total + (sale.pouletIds?.length || 0);

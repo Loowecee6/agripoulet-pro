@@ -163,14 +163,26 @@ export default function App() {
             }
             const stockActuel = cloudData.stockBatches.reduce((s, b) => s + (b.quantite || 0) + b.poulets.filter(p => !p.vendu).length, 0);
             const totalVendus = calculateTotalSoldFromSales(cloudData.sales);
-            const stockFinal = Math.max(0, stockActuel - totalVendus);
+            // DIAGNOSTIC : afficher les valeurs pour comprendre le bug
+            const detailVentes = cloudData.sales
+              .filter(s => !('deletedAt' in s))
+              .map(s => `${s.clientNom}: factureItems=${s.factureItems?.map(i => i.qte + '|' + i.prixU).join(',') || 'aucun'} pouletIds=${s.pouletIds?.length || 0}`)
+              .join('\n');
+            alert(
+              `📊 DIAGNOSTIC STOCK\n\n` +
+              `Stock actuel: ${stockActuel}\n` +
+              `Total vendus calculé: ${totalVendus}\n` +
+              `Stock final: ${Math.max(0, stockActuel - totalVendus)}\n` +
+              `Nombre de ventes: ${cloudData.sales.filter(s => !('deletedAt' in s)).length}\n\n` +
+              `Détail des ventes:\n${detailVentes}`
+            );
             if (!confirm(
               `📊 Stock actuel : ${stockActuel} poulets\n` +
               `📋 Ventes enregistrées : ${totalVendus} poulets\n` +
-              `🎯 Stock après correction : ${stockFinal} poulets\n\n` +
-              `Les lots en trop seront fusionnés en 1 lot. Les ${totalVendus} poulets déjà vendus\n` +
-              `seront déduits (vos factures existantes sont conservées).`
+              `🎯 Stock après correction : ${Math.max(0, stockActuel - totalVendus)} poulets\n\n` +
+              `Confirmer la synchronisation ?`
             )) return;
+            const stockFinal = Math.max(0, stockActuel - totalVendus);
             const firstBatch = cloudData.stockBatches[0];
             const fixedBatches = [{
               ...firstBatch,
