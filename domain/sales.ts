@@ -93,7 +93,7 @@ export function markChickensAsSold(
 ): StockBatch[] {
   return stockBatches.map(b => ({
     ...b,
-    poulets: b.poulets.map(p =>
+    poulets: (b.poulets || []).map(p =>
       pouletIds.includes(p.id) ? { ...p, vendu: true } : p
     ),
   }));
@@ -119,11 +119,12 @@ export function deductStockByQuantity(
     if (b.quantite && b.quantite > 0) {
       const pris = Math.min(restant, b.quantite);
       restant -= pris;
-      return { ...b, quantite: b.quantite - pris };
+      // Garantir les champs requis par les règles Firestore (poulets, typeOrigine)
+      return { ...b, poulets: b.poulets ?? [], typeOrigine: b.typeOrigine || 'PR', quantite: b.quantite - pris };
     }
 
     // 2. Poulets individuels : marquer comme vendu
-    const nonVendus = b.poulets.filter(p => !p.vendu).length;
+    const nonVendus = (b.poulets || []).filter(p => !p.vendu).length;
     if (nonVendus <= 0) return b;
 
     const aPrendre = Math.min(restant, nonVendus);
@@ -154,7 +155,7 @@ export function markChickensAsUnsold(
 ): StockBatch[] {
   return stockBatches.map(b => ({
     ...b,
-    poulets: b.poulets.map(p =>
+    poulets: (b.poulets || []).map(p =>
       pouletIds.includes(p.id) ? { ...p, vendu: false } : p
     ),
   }));

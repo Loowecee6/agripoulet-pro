@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ShieldCheck, Bell, LogOut, X, Syringe, AlertTriangle, CreditCard, Settings, Moon, Sun, Users, Download } from 'lucide-react';
+import { ShieldCheck, Bell, LogOut, X, Syringe, AlertTriangle, CreditCard, Settings, Moon, Sun, Users, Download, Wrench } from 'lucide-react';
 import { User, Sale } from '../../types';
 import { ConnectionStatus } from './ConnectionStatus';
 import type { NotificationEvent } from '../../services/notificationService';
@@ -20,6 +20,7 @@ interface HeaderProps {
   onToggleDarkMode?: () => void;
   onOpenUserManagement?: () => void;
   onBackup?: () => void;
+  onRepairStock?: () => void;
   currentSeason?: {
     icon: string;
     label: string;
@@ -43,7 +44,7 @@ const severityColors: Record<string, { bg: string; border: string; text: string;
   info: { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-800', dot: 'bg-blue-500' },
 };
 
-export const Header = ({ user, onLogout, notifications, overdueCount, notificationEvents = [], isSyncing = false, isOnline, hasPendingSync = false, pendingSyncCount = 0, syncError, onOpenNotifSettings, darkMode, onToggleDarkMode, onOpenUserManagement, onBackup, currentSeason, seasonWarning, onSeasonOffsetChange, seasonOffset = 0 }: HeaderProps) => {
+export const Header = ({ user, onLogout, notifications, overdueCount, notificationEvents = [], isSyncing = false, isOnline, hasPendingSync = false, pendingSyncCount = 0, syncError, onOpenNotifSettings, darkMode, onToggleDarkMode, onOpenUserManagement, onBackup, onRepairStock, currentSeason, seasonWarning, onSeasonOffsetChange, seasonOffset = 0 }: HeaderProps) => {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showSeasonControl, setShowSeasonControl] = useState(false);
   const seasonControlRef = useRef<HTMLDivElement>(null);
@@ -176,6 +177,11 @@ export const Header = ({ user, onLogout, notifications, overdueCount, notificati
           {(user.role === 'super_admin' || user.role === 'admin') && onOpenUserManagement && (
             <button onClick={onOpenUserManagement} className="p-2 hover:bg-white/10 rounded-full" title="Gérer les utilisateurs">
               <Users className="w-5 h-5" />
+            </button>
+          )}
+          {onRepairStock && (user.role === 'super_admin' || user.role === 'admin') && (
+            <button onClick={onRepairStock} className="p-2 hover:bg-white/10 rounded-full" title="Réparer le stock (88 poulets)">
+              <Wrench className="w-5 h-5" />
             </button>
           )}
           {onBackup && (

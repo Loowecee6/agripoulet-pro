@@ -155,6 +155,27 @@ export default function App() {
           notificationEvents={notificationEvents}
           isOnline={isOnline}
           onBackup={cloudData ? () => exportFullBackup(cloudData) : undefined}
+          onRepairStock={cloudData ? () => {
+            if (cloudData.stockBatches.length === 0) {
+              alert('Aucun stock à réparer.');
+              return;
+            }
+            const total = cloudData.stockBatches.reduce((s, b) => s + (b.quantite || 0) + b.poulets.filter(p => !p.vendu).length, 0);
+            if (!confirm(`Le stock total est de ${total} poulets. Remettre à 88 ? Les lots en trop seront supprimés.`)) return;
+            const firstBatch = cloudData.stockBatches[0];
+            const fixedBatches = [{
+              ...firstBatch,
+              poulets: firstBatch.poulets ?? [],
+              typeOrigine: firstBatch.typeOrigine || 'PR',
+              lettre: firstBatch.lettre || 'A',
+              prixKg: firstBatch.prixKg || 0,
+              coutInitial: firstBatch.coutInitial || 0,
+              isFinalized: firstBatch.isFinalized ?? false,
+              quantite: 88,
+            }];
+            updateData({ ...cloudData, stockBatches: fixedBatches });
+            alert('✅ Stock réparé : 1 lot avec 88 poulets.');
+          } : undefined}
           syncError={syncError}
           onOpenNotifSettings={() => setShowNotifSettings(true)}
           darkMode={cloudData?.settings.darkMode}
