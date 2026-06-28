@@ -28,6 +28,7 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { exportFullBackup } from './utils/exportXLS';
 import { db } from './services/firebaseConfig';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { calculateTotalSoldFromSales } from './domain/sales';
 
 const APP_VERSION = 'v6';
 
@@ -161,20 +162,36 @@ export default function App() {
             const lots = cloudData.stockBatches;
             if (lots.length === 0) { alert('Aucun stock.'); return; }
 
-            // Diagnostic : afficher tous les lots
+            // Calculer le stock actuel total
+            const stockActuel = lots.reduce((s, b) => s + (b.quantite || 0) + b.poulets.filter(p => !p.vendu).length, 0);
+            // Calculer le total vendu à partir des factures
+            const totalVendus = calculateTotalSoldFromSales(cloudData.sales);
+            // Stock final après déduction des ventes
+            const stockFinal = Math.max(0, stockActuel - totalVendus);
+
+            // Diagnostic détaillé
             const diagLots = lots.map((b, i) =>
-              `  Lot ${i + 1}: "${b.nom}" → ${b.quantite || 0} poulets (ID: ${b.id.slice(0, 8)}...)`
+              `  Lot ${i + 1}: "${b.nom}" → ${b.quantite || 0} poulets`
             ).join('\n');
+            const nbFactures = cloudData.sales.filter(s => !('deletedAt' in s)).length;
             alert(
-              `📊 LOTS DE STOCK ACTUELS\n\n${diagLots}\n\n` +
-              `👉 Le 1er lot sera conservé, les autres supprimés.`
+              `📊 DIAGNOSTIC COMPLET\n\n` +
+              `${diagLots}\n\n` +
+              `📋 Ventes enregistrées : ${nbFactures} facture(s)\n` +
+              `🐔 Poulets vendus (total) : ${totalVendus}\n` +
+              `📦 Stock actuel total : ${stockActuel}\n` +
+              `🎯 Stock après correction : ${stockFinal}`
             );
 
             if (!confirm(
-              `Garder uniquement le 1er lot ("${lots[0].nom}", ${lots[0].quantite || 0} poulets)\n` +
-              `et supprimer les ${lots.length - 1} autre(s) lot(s) ?`
+              `Corriger le stock ?\n\n` +
+              `📦 Stock total : ${stockActuel} poulets\n` +
+              `📋 Déjà vendus : ${totalVendus} poulets\n` +
+              `🎯 Stock final : ${stockFinal} poulets\n\n` +
+              `Les factures existantes sont conservées.`
             )) return;
 
+            // Garder seulement le 1er lot avec la quantité corrigée
             const firstBatch = lots[0];
             const kept = {
               ...firstBatch,
@@ -184,12 +201,11 @@ export default function App() {
               prixKg: firstBatch.prixKg || 0,
               coutInitial: firstBatch.coutInitial || 0,
               isFinalized: firstBatch.isFinalized ?? false,
-              quantite: firstBatch.quantite || 0,
+              quantite: stockFinal,
             };
 
-            // Mise à jour DIRECTE de Firestore (contourne writeChanges)
             try {
-              // 1. Sauvegarder le premier lot (complet avec tous les champs requis)
+              // 1. Écrire le lot conservé dans Firestore
               await setDoc(doc(db, 'stockBatches', firstBatch.id), kept);
               // 2. Supprimer les autres lots
               for (let i = 1; i < lots.length; i++) {
@@ -197,13 +213,19 @@ export default function App() {
               }
               // 3. Mettre à jour l'état local
               updateData({ ...cloudData, stockBatches: [kept] });
-              alert(`✅ Opération réussie !\n\nLot conservé : "${firstBatch.nom}" (${kept.quantite} poulets)\n${lots.length - 1} lot(s) supprimé(s).\n\nLes modifications sont persistées dans Firestore.`);
+              alert(
+                `✅ Stock synchronisé avec les ventes !\n\n` +
+                `📦 ${stockActuel} → ${stockFinal} poulets\n` +
+                `📋 ${totalVendus} poulets déduits (${nbFactures} factures conservées)\n` +
+                `${lots.length - 1} lot(s) en trop supprimé(s).\n\n` +
+                `Les modifications sont persistées dans Firestore.`
+              );
             } catch (e: any) {
               alert(
                 `❌ ÉCHEC DE L'ÉCRITURE FIRESTORE\n\n` +
                 `Erreur: ${e?.message || e || 'Erreur inconnue'}\n\n` +
                 `Code: ${e?.code || 'N/A'}\n\n` +
-                `Veuillez copier ce message et me le transmettre pour diagnostic.`
+                `Veuillez copier ce message et me le transmettre.`
               );
             }
           } : undefined}
