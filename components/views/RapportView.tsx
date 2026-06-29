@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { KeyRound, TrendingUp, Download, FileSpreadsheet } from 'lucide-react';
 import { AppData, User } from '../../types';
 import { Modal } from '../common/Modal';
-import { DataMigration } from '../common/DataMigration';
 import { BackupManager } from '../common/BackupManager';
 import { exportBatchExpenses, exportBatchSummary } from '../../utils/exportXLS';
 import { hashPassword } from '../../utils/crypto';
@@ -70,7 +69,6 @@ export const RapportView = ({ data, setData, user, permissions }: RapportViewPro
 
   return (
     <div className="space-y-6 pb-20">
-      <DataMigration />
       <BackupManager currentData={data} onDataRestored={setData} />
 
       <div className="flex justify-between items-center">

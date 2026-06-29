@@ -22,7 +22,7 @@ import { useCurrentSeason } from './hooks/useCurrentSeason';
 import { useAutoBackup } from './hooks/useAutoBackup';
 import { useRealtimeData } from './hooks/useRealtimeData';
 import { useFCMNotifications } from './hooks/useFCMNotifications';
-import { getUserRole } from './services/userService';
+import { getUserRole, claimAdminRole } from './services/userService';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
@@ -141,6 +141,17 @@ export default function App() {
     updateData({ ...cloudData, settings: { ...cloudData.settings, darkMode: !cloudData.settings.darkMode } });
   };
 
+  const handleClaimAdmin = async (code: string): Promise<boolean> => {
+    if (!user || !cloudData) return false;
+    const hash = cloudData.settings.adminPasswordHash;
+    if (!hash) return false;
+    const ok = await claimAdminRole(user.uid, code, hash);
+    if (ok) {
+      setUserRole('admin');
+    }
+    return ok;
+  };
+
   return (
     <ErrorBoundary>
       <div
@@ -161,6 +172,7 @@ export default function App() {
           darkMode={cloudData?.settings.darkMode}
           onToggleDarkMode={toggleDarkMode}
           onOpenUserManagement={() => setShowUserManagement(true)}
+          onClaimAdmin={handleClaimAdmin}
           currentSeason={season.active || undefined}
           seasonWarning={season.data?.warning || null}
           onSeasonOffsetChange={handleSeasonOffsetChange}

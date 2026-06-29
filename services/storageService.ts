@@ -283,13 +283,13 @@ export const storageService = {
 
       if (pbSnap.docs.length > 0 || sbSnap.docs.length > 0) {
         const data: AppData = {
-          productionBatches: pbSnap.docs.map(d => ({ id: d.id, ...d.data() } as ProductionBatch)),
-          stockBatches: sbSnap.docs.map(d => ({ id: d.id, ...d.data() } as StockBatch)),
-          clients: clSnap.docs.map(d => ({ id: d.id, ...d.data() } as Client)),
-          sales: saSnap.docs.map(d => ({ id: d.id, ...d.data() } as Sale)),
-          reservations: reSnap.docs.map(d => ({ id: d.id, ...d.data() } as Reservation)),
+          productionBatches: pbSnap.docs.map(d => ({ ...d.data(), id: d.id } as ProductionBatch)),
+          stockBatches: sbSnap.docs.map(d => ({ ...d.data(), id: d.id } as StockBatch)),
+          clients: clSnap.docs.map(d => ({ ...d.data(), id: d.id } as Client)),
+          sales: saSnap.docs.map(d => ({ ...d.data(), id: d.id } as Sale)),
+          reservations: reSnap.docs.map(d => ({ ...d.data(), id: d.id } as Reservation)),
           settings: settingsSnap.exists() ? (settingsSnap.data() as AppSettings) : getDefaultData().settings,
-          activityLog: alSnap.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLogEntry)).slice(-500),
+          activityLog: alSnap.docs.map(d => ({ ...d.data(), id: d.id } as ActivityLogEntry)).slice(-500),
           userPermissions: upSnap.exists() ? (upSnap.data() as Record<string, string[]>) : undefined,
           fcmToken: fcmSnap.exists() ? (fcmSnap.data() as any).token : undefined,
           fcmPushFunctionUrl: fcmSnap.exists() ? (fcmSnap.data() as any).pushFunctionUrl : undefined,

@@ -28,7 +28,7 @@ export function subscribeToAllCollections(
     const col = collection(db, name);
     unsubs.push(
       onSnapshot(col, (snap) => {
-        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+        const docs = snap.docs.map(d => ({ ...d.data(), id: d.id })) as any[];
         (data as any)[name] = docs;
         if (loaded < total) loaded++;
         tryEmit();
@@ -58,7 +58,7 @@ export function subscribeToAllCollections(
   };
 }
 
-export function writeChanges(oldData: AppData | null, newData: AppData): void {
+export async function writeChanges(oldData: AppData | null, newData: AppData): Promise<void> {
   if (!oldData) return;
 
   const batch = writeBatch(db);
@@ -115,6 +115,6 @@ export function writeChanges(oldData: AppData | null, newData: AppData): void {
   }
 
   if (ops > 0) {
-    batch.commit().catch(err => console.error('[realtime] Batch write failed:', err));
+    await batch.commit();
   }
 }

@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, ChevronRight, CheckCircle2, Trash2, Edit2, Printer } from 'lucide-react';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db } from '../../services/firebaseConfig';
 import { printChickenLabels } from '../../utils/labelPrint';
 import { AppData, User, StockBatch, Chicken } from '../../types';
 import { Modal } from '../common/Modal';
@@ -17,6 +19,8 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
   const [isAddBatchModalOpen, setIsAddBatchModalOpen] = useState(false);
   const [editingBatch, setEditingBatch] = useState<StockBatch | null>(null);
   const [editingChicken, setEditingChicken] = useState<{ id: string; chicken: Chicken } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [newBatchType, setNewBatchType] = useState<'PR' | 'IM'>('PR');
   
   // États locaux pour le calcul automatique réciproque
   const [tempPoids, setTempPoids] = useState<string>('');
@@ -39,18 +43,22 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
     e.preventDefault();
     if (!can('stock.create')) return;
     const f = new FormData(e.currentTarget);
+    const typeOrigine = (f.get('typeOrigine') as 'PR' | 'IM') || 'PR';
+    const quantite = typeOrigine === 'IM' ? Number(f.get('quantite')) || 0 : undefined;
     const newBatch: StockBatch = {
       id: crypto.randomUUID(),
       nom: f.get('nom') as string,
-      typeOrigine: (f.get('typeOrigine') as 'PR' | 'IM') || 'PR',
+      typeOrigine,
       lettre: (f.get('lettre') as string || 'S').toUpperCase(),
       prixKg: Number(f.get('prixKg')) || 2500,
       coutInitial: Number(f.get('cout')) || 0,
       poulets: [],
-      isFinalized: false
+      isFinalized: false,
+      ...(quantite && quantite > 0 ? { quantite } : {}),
     };
     setData({ ...data, stockBatches: [newBatch, ...data.stockBatches] });
     setIsAddBatchModalOpen(false);
+    setNewBatchType('PR');
   };
 
   const handlePoidsChange = (val: string) => {
@@ -155,22 +163,25 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
         ))}
       </div>
 
-      <Modal isOpen={isAddBatchModalOpen} onClose={() => setIsAddBatchModalOpen(false)} title="Nouveau Lot de Stock">
+      <Modal isOpen={isAddBatchModalOpen} onClose={() => { setIsAddBatchModalOpen(false); setNewBatchType('PR'); }} title="Nouveau Lot de Stock">
         <form onSubmit={handleCreateBatch} className="space-y-4">
           <div className="space-y-1">
             <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Origine du Lot</label>
             <div className="grid grid-cols-2 gap-2 bg-gray-50 p-1 rounded-2xl border">
               <label className="cursor-pointer">
-                <input type="radio" name="typeOrigine" value="PR" defaultChecked className="hidden peer" />
+                <input type="radio" name="typeOrigine" value="PR" checked={newBatchType === 'PR'} onChange={() => setNewBatchType('PR')} className="hidden peer" />
                 <div className="text-center py-2 text-xs font-bold rounded-xl peer-checked:bg-white peer-checked:shadow-sm peer-checked:text-orange-600 text-gray-400 transition-all">Production (PR)</div>
               </label>
               <label className="cursor-pointer">
-                <input type="radio" name="typeOrigine" value="IM" className="hidden peer" />
+                <input type="radio" name="typeOrigine" value="IM" checked={newBatchType === 'IM'} onChange={() => setNewBatchType('IM')} className="hidden peer" />
                 <div className="text-center py-2 text-xs font-bold rounded-xl peer-checked:bg-white peer-checked:shadow-sm peer-checked:text-orange-600 text-gray-400 transition-all">Importation (IM)</div>
               </label>
             </div>
           </div>
           <input name="nom" required placeholder="Nom du lot (ex: Lot Poulets Adultes)" className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none dark:border-gray-600 dark:text-white" />
+          {newBatchType === 'IM' && (
+            <input name="quantite" type="number" min="1" required placeholder="Nombre de poulets" className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none dark:border-gray-600 dark:text-white" />
+          )}
           <div className="grid grid-cols-2 gap-4">
             <input name="lettre" maxLength={1} placeholder="Lettre (ex: A, B, C)" className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none dark:border-gray-600 dark:text-white" />
             <input name="prixKg" type="number" min="0" placeholder="Prix/Kg (défaut: 2500)" className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none dark:border-gray-600 dark:text-white" />
@@ -180,7 +191,7 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
         </form>
       </Modal>
 
-      <Modal isOpen={!!selectedBatch} onClose={() => { setSelectedBatch(null); setTempPoids(''); setTempPrix(''); }} title={selectedBatch?.nom || ""}>
+      <Modal isOpen={!!selectedBatch} onClose={() => { setSelectedBatch(null); setTempPoids(''); setTempPrix(''); setConfirmDelete(false); }} title={selectedBatch?.nom || ""}>
         {selectedBatch && (
           <div className="space-y-6">
             {/* Lot groupé (abattage partiel en nombre) */}
@@ -358,18 +369,43 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
             </div>
             )}
             
-            {can('stock.delete') && !selectedBatch.isFinalized && (
-              <button 
-                onClick={() => {
-                   if(confirm("Supprimer complètement ce lot de stock ?")) {
-                     setData({ ...data, stockBatches: data.stockBatches.filter(b => b.id !== selectedBatch.id) });
-                     setSelectedBatch(null);
-                   }
-                }}
-                className="w-full p-3 text-red-500 text-[10px] font-bold uppercase tracking-widest"
-              >
-                Supprimer le lot
-              </button>
+            {can('stock.delete') && (
+              <>
+                {!confirmDelete ? (
+                  <button 
+                    onClick={() => setConfirmDelete(true)}
+                    className="w-full p-3 text-red-500 text-[10px] font-bold uppercase tracking-widest"
+                  >
+                    Supprimer le lot
+                  </button>
+                ) : (
+                  <div className="bg-red-50 border-2 border-red-200 p-4 rounded-2xl space-y-3">
+                    <p className="text-sm font-bold text-red-700 text-center">Confirmer la suppression définitive ?</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={() => setConfirmDelete(false)}
+                        className="w-full p-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-xs"
+                      >
+                        Annuler
+                      </button>
+                      <button 
+                        onClick={() => {
+                          const batchId = selectedBatch!.id;
+                          setSelectedBatch(null);
+                          setConfirmDelete(false);
+                          deleteDoc(doc(db, 'stockBatches', batchId)).catch(err => {
+                            console.error('[StockView] Erreur suppression Firestore:', err);
+                            alert("Erreur lors de la suppression.");
+                          });
+                        }}
+                        className="w-full p-3 bg-red-600 text-white rounded-xl font-bold text-xs"
+                      >
+                        Oui, supprimer
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

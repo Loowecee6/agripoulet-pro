@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ShieldCheck, Bell, LogOut, X, Syringe, AlertTriangle, CreditCard, Settings, Moon, Sun, Users } from 'lucide-react';
+import { ShieldCheck, Bell, LogOut, X, Syringe, AlertTriangle, CreditCard, Settings, Moon, Sun, Users, KeyRound } from 'lucide-react';
 import { User, Sale } from '../../types';
 import { ConnectionStatus } from './ConnectionStatus';
 import type { NotificationEvent } from '../../services/notificationService';
@@ -19,6 +19,7 @@ interface HeaderProps {
   darkMode?: boolean;
   onToggleDarkMode?: () => void;
   onOpenUserManagement?: () => void;
+  onClaimAdmin?: (code: string) => Promise<boolean>;
   currentSeason?: {
     icon: string;
     label: string;
@@ -44,9 +45,13 @@ const severityColors: Record<string, { bg: string; border: string; text: string;
   info: { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-800', dot: 'bg-blue-500' },
 };
 
-export const Header = ({ user, onLogout, notifications, overdueCount, notificationEvents = [], isSyncing, isOnline, hasPendingSync, pendingSyncCount, syncError, onOpenNotifSettings, darkMode, onToggleDarkMode, onOpenUserManagement, currentSeason, seasonWarning, onSeasonOffsetChange, seasonOffset = 0, onForceSync, isForcingSync }: HeaderProps) => {
+export const Header = ({ user, onLogout, notifications, overdueCount, notificationEvents = [], isSyncing, isOnline, hasPendingSync, pendingSyncCount, syncError, onOpenNotifSettings, darkMode, onToggleDarkMode, onOpenUserManagement, onClaimAdmin, currentSeason, seasonWarning, onSeasonOffsetChange, seasonOffset = 0, onForceSync, isForcingSync }: HeaderProps) => {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showSeasonControl, setShowSeasonControl] = useState(false);
+  const [showClaimAdmin, setShowClaimAdmin] = useState(false);
+  const [claimAdminCode, setClaimAdminCode] = useState('');
+  const [claimAdminError, setClaimAdminError] = useState('');
+  const [claimAdminLoading, setClaimAdminLoading] = useState(false);
   const seasonControlRef = useRef<HTMLDivElement>(null);
 
   // Fermer le popover saison au clic extérieur
@@ -188,6 +193,11 @@ export const Header = ({ user, onLogout, notifications, overdueCount, notificati
               <Users className="w-5 h-5" />
             </button>
           )}
+          {(user.role !== 'super_admin' && user.role !== 'admin') && onClaimAdmin && (
+            <button onClick={() => setShowClaimAdmin(true)} className="p-2 hover:bg-white/10 rounded-full" title="Réclamer le rôle Admin">
+              <KeyRound className="w-5 h-5" />
+            </button>
+          )}
           <button onClick={onLogout} className="p-2 hover:bg-white/10 rounded-full"><LogOut className="w-5 h-5" /></button>
         </div>
       </div>
@@ -317,6 +327,56 @@ export const Header = ({ user, onLogout, notifications, overdueCount, notificati
               Aucune notification
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal réclamation admin */}
+      {showClaimAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => { setShowClaimAdmin(false); setClaimAdminCode(''); setClaimAdminError(''); }} />
+          <div className="relative bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Réclamer le rôle Admin</h3>
+            <p className="text-xs text-gray-500 mb-4">Entrez le code secret administrateur pour obtenir les droits complets.</p>
+            {claimAdminError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-xl text-xs font-bold mb-3">{claimAdminError}</div>
+            )}
+            <input
+              type="password"
+              inputMode="numeric"
+              value={claimAdminCode}
+              onChange={(e) => { setClaimAdminCode(e.target.value); setClaimAdminError(''); }}
+              placeholder="Code secret (4 chiffres)"
+              className="w-full p-4 border-2 border-orange-200 rounded-2xl text-center text-2xl font-black tracking-[0.5em] outline-none focus:border-orange-500 mb-4"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowClaimAdmin(false); setClaimAdminCode(''); setClaimAdminError(''); }}
+                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl font-bold text-xs"
+              >Annuler</button>
+              <button
+                disabled={!claimAdminCode || claimAdminLoading}
+                onClick={async () => {
+                  setClaimAdminLoading(true);
+                  setClaimAdminError('');
+                  try {
+                    const ok = await onClaimAdmin!(claimAdminCode);
+                    if (ok) {
+                      window.location.reload();
+                    } else {
+                      setClaimAdminError('Code incorrect.');
+                    }
+                  } catch {
+                    setClaimAdminError('Erreur lors de la vérification.');
+                  } finally {
+                    setClaimAdminLoading(false);
+                  }
+                }}
+                className="flex-1 py-3 bg-orange-600 text-white rounded-2xl font-bold text-xs disabled:opacity-50"
+              >
+                {claimAdminLoading ? 'Vérification...' : 'Confirmer'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
       </div>
