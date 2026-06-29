@@ -53,7 +53,7 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
       prixKg: Number(f.get('prixKg')) || 2500,
       coutInitial: Number(f.get('cout')) || 0,
       poulets: [],
-      isFinalized: false,
+      isFinalized: typeOrigine === 'IM',
       ...(quantite && quantite > 0 ? { quantite } : {}),
     };
     setData({ ...data, stockBatches: [newBatch, ...data.stockBatches] });

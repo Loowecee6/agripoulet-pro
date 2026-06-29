@@ -42,7 +42,7 @@ export const DashboardView = ({ data, onTabChange, permissions = [] }: Dashboard
   // === KPI Calculations ===
 
   const stats = useMemo(() => {
-    // Poulets vivants (production - toutes bandes actives)
+    // Poulets vivants (production actives + stock non vendus)
     const liveChickens = data.productionBatches
       .filter(b => b.statut === 'active')
       .reduce((acc, batch) => {
@@ -54,6 +54,8 @@ export const DashboardView = ({ data, onTabChange, permissions = [] }: Dashboard
     const stockAvailable = data.stockBatches
       .filter(sb => sb.isFinalized)
       .reduce((acc, sb) => acc + (sb.quantite || sb.poulets.filter(p => !p.vendu).length), 0);
+
+    const totalLiveChickens = liveChickens + stockAvailable;
 
     // Crédits en cours (solde restant après paiements partiels)
     const creditsEnCours = activeSales
@@ -108,6 +110,7 @@ export const DashboardView = ({ data, onTabChange, permissions = [] }: Dashboard
     return {
       liveChickens,
       stockAvailable,
+      totalLiveChickens,
       creditsEnCours,
       creditsCount,
       ventesDuJour,
@@ -364,7 +367,7 @@ export const DashboardView = ({ data, onTabChange, permissions = [] }: Dashboard
               +{stats.stockAvailable} en stock
             </span>
           </div>
-          <div className="text-2xl font-black">{stats.liveChickens}</div>
+          <div className="text-2xl font-black">{stats.totalLiveChickens}</div>
           <div className="text-xs text-orange-100 mt-1">Poulets vivants</div>
         </div>
 
