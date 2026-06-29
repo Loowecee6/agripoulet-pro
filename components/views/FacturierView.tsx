@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { ArrowLeft, Plus, Trash2, Download, Copy, Send, Receipt, User, Phone, Calendar, Check, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Receipt, User, Phone, Calendar, Check } from 'lucide-react';
 import { AppData, Client, Sale } from '../../types';
-import { formatWhatsAppUrl } from '../../utils/whatsapp';
 import { deductStockByQuantity } from '../../domain/sales';
 import { useToast } from '../common/ToastContext';
 
@@ -96,211 +95,6 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
     setItems(updated);
   };
 
-  // --- Canvas Rendering helper ---
-  const generateCanvasBlob = (): Promise<Blob | null> => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      const rowHeight = 35;
-      const headerHeight = 240;
-      const footerHeight = 130;
-      const dynamicHeight = items.length * rowHeight;
-      const canvasWidth = 500;
-      const canvasHeight = headerHeight + dynamicHeight + footerHeight;
-
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        resolve(null);
-        return;
-      }
-
-      // Fill background (white)
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-      // Draw thin grey border
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(5, 5, canvasWidth - 10, canvasHeight - 10);
-
-      // Top banner
-      ctx.fillStyle = '#ea580c';
-      ctx.fillRect(5, 5, canvasWidth - 10, 15);
-
-      // Logo/Chicken Icon
-      ctx.font = '36px "Inter", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('🐔', canvasWidth / 2, 65);
-
-      // Header Text
-      ctx.font = 'bold 22px "Inter", sans-serif';
-      ctx.fillStyle = '#1e293b';
-      ctx.fillText('AGRIPOULET PRO', canvasWidth / 2, 105);
-
-      ctx.font = 'italic 12px "Inter", sans-serif';
-      ctx.fillStyle = '#64748b';
-      ctx.fillText('Élevage & Vente de Poulets de Qualité', canvasWidth / 2, 125);
-
-      // Dotted lines
-      const drawDottedLine = (y: number) => {
-        ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(25, y);
-        ctx.lineTo(canvasWidth - 25, y);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      };
-
-      drawDottedLine(140);
-
-      // Invoice info
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#475569';
-      ctx.font = 'bold 11px "Inter", sans-serif';
-      ctx.fillText(`FACTURE N° : FAC-${dateFacture.replace(/-/g, '')}-${String(Math.floor(100 + Math.random() * 900))}`, 25, 160);
-      ctx.fillText(`Date : ${new Date(dateFacture).toLocaleDateString('fr-FR')}`, 25, 178);
-
-      // Client info
-      ctx.fillText(`Client : ${clientNom || 'Client de passage'}`, 25, 196);
-      if (clientTel) {
-        ctx.fillText(`Tél : ${clientTel}`, 25, 214);
-      }
-      const nbPoulets = items.reduce((s, i) => s + i.qte, 0);
-      ctx.fillText(`Nb de poulets : ${nbPoulets}`, 25, clientTel ? 232 : 214);
-
-      const infoEnd = clientTel ? 232 : 214;
-      drawDottedLine(infoEnd + 18);
-
-      // Table Header
-      ctx.font = 'bold 11px "Inter", sans-serif';
-      ctx.fillStyle = '#1e293b';
-      ctx.fillText('Désignation', 25, infoEnd + 40);
-      ctx.textAlign = 'right';
-      ctx.fillText('Prix (F)', 475, infoEnd + 40);
-
-      drawDottedLine(infoEnd + 52);
-
-      // Table items
-      let currentY = infoEnd + 75;
-      ctx.font = 'medium 11px "Inter", sans-serif';
-      ctx.fillStyle = '#334155';
-
-      items.forEach((item) => {
-        ctx.textAlign = 'left';
-        let name = item.designation || 'Poulet';
-        if (item.qte > 1) {
-          name += ` (x${item.qte})`;
-        }
-        if (name.length > 36) name = name.substring(0, 33) + '...';
-        ctx.fillText(name, 25, currentY);
-
-        ctx.textAlign = 'right';
-        ctx.font = 'bold 11px "Inter", sans-serif';
-        ctx.fillText(String(item.qte * item.prixU), 475, currentY);
-        ctx.font = 'medium 11px "Inter", sans-serif';
-
-        currentY += rowHeight;
-      });
-
-      drawDottedLine(currentY - 12);
-
-      // Total
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 14px "Inter", sans-serif';
-      ctx.fillText('TOTAL À PAYER', 25, currentY + 16);
-
-      ctx.textAlign = 'right';
-      ctx.fillStyle = '#ea580c';
-      ctx.font = '900 17px "Inter", sans-serif';
-      ctx.fillText(`${totalFacture.toLocaleString('fr-FR')} F CFA`, 475, currentY + 18);
-
-      // Payment Status Banner
-      currentY += 45;
-      const bannerWidth = canvasWidth - 50;
-      const bannerHeight = 32;
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 11px "Inter", sans-serif';
-
-      if (isDeferred) {
-        ctx.fillStyle = '#fef2f2';
-        ctx.fillRect(25, currentY, bannerWidth, bannerHeight);
-        ctx.strokeStyle = '#fca5a5';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(25, currentY, bannerWidth, bannerHeight);
-        ctx.fillStyle = '#b91c1c';
-        ctx.fillText(
-          `PAIEMENT DIFFÉRÉ — ÉCHÉANCE : ${new Date(dateEcheance).toLocaleDateString('fr-FR')}`,
-          canvasWidth / 2,
-          currentY + 20
-        );
-      } else {
-        ctx.fillStyle = '#f0fdf4';
-        ctx.fillRect(25, currentY, bannerWidth, bannerHeight);
-        ctx.strokeStyle = '#86efac';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(25, currentY, bannerWidth, bannerHeight);
-        ctx.fillStyle = '#15803d';
-        ctx.fillText('PAIEMENT COMPTANT (SOLDE)', canvasWidth / 2, currentY + 20);
-      }
-
-      // Footer
-      currentY += bannerHeight + 25;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#64748b';
-      ctx.font = 'italic 10px "Inter", sans-serif';
-      ctx.fillText('Merci pour votre confiance ! 🐔', canvasWidth / 2, currentY);
-      ctx.fillText('AgriPoulet Pro — Facturier WhatsApp', canvasWidth / 2, currentY + 14);
-
-      canvas.toBlob((blob) => {
-        resolve(blob);
-      }, 'image/png');
-    });
-  };
-
-  const handleDownload = async () => {
-    try {
-      const blob = await generateCanvasBlob();
-      if (!blob) throw new Error('Impossible de générer le reçu.');
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Facture_${(clientNom || 'Client').replace(/\s+/g, '_')}_${dateFacture}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      addToast('Image du reçu téléchargée avec succès !', 'success');
-    } catch (err) {
-      console.error(err);
-      addToast("Erreur lors de la génération du téléchargement.", 'error');
-    }
-  };
-
-  const handleCopyToClipboard = async () => {
-    try {
-      const blob = await generateCanvasBlob();
-      if (!blob) throw new Error('Impossible de générer le reçu.');
-
-      if (navigator.clipboard && window.ClipboardItem) {
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'image/png': blob })
-        ]);
-        addToast('Reçu copié ! Vous pouvez le coller (Ctrl+V / Coller) sur WhatsApp.', 'success');
-      } else {
-        throw new Error('Presse-papiers non supporté dans ce navigateur.');
-      }
-    } catch (err: any) {
-      console.warn(err);
-      addToast('La copie directe a échoué. Utilisez le bouton Télécharger pour enregistrer le reçu.', 'info');
-    }
-  };
-
   const resetForm = useCallback(() => {
     setItems([{ id: '1', designation: 'Poulet de chair', qte: 1, prixU: 4000, poids: 1.5 }]);
     setActiveItemIndex(0);
@@ -371,39 +165,6 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
       isSubmittingRef.current = false;
     }
   }, [items, totalFacture, clientNom, clientTel, isDeferred, dateEcheance, dateFacture, data, setData, addToast, resetForm]);
-
-  const handleShareWhatsApp = () => {
-    const ok = handleSaveVente();
-    if (!ok) return;
-    const cleanPhone = clientTel.trim();
-    
-    // Construct recap text
-    let text = `*AGRIPOULET PRO - FACTURE* 🐔\n`;
-    text += `---------------------------------\n`;
-    text += `*Client :* ${clientNom || 'Client de passage'}\n`;
-    text += `*Date :* ${new Date(dateFacture).toLocaleDateString('fr-FR')}\n`;
-    if (isDeferred) {
-      text += `*Échéance :* ${new Date(dateEcheance).toLocaleDateString('fr-FR')} (Paiement différé ⚠️)\n`;
-    } else {
-      text += `*Paiement :* Comptant (Soldé ✅)\n`;
-    }
-    text += `---------------------------------\n`;
-    items.forEach(item => {
-      text += `- ${item.designation} (x${item.qte}) : *${(item.qte * item.prixU).toLocaleString('fr-FR')} F*\n`;
-    });
-    text += `---------------------------------\n`;
-    text += `*TOTAL À PAYER : ${totalFacture.toLocaleString('fr-FR')} F CFA*\n\n`;
-    text += `Veuillez trouver ci-joint l'image détaillée de votre facture. Merci pour votre confiance ! 🙏🐔`;
-
-    const url = formatWhatsAppUrl(cleanPhone || '00000000', text);
-    if (url) {
-      // First copy image to clipboard automatically for convenient pasting
-      handleCopyToClipboard();
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } else {
-      addToast('Numéro de téléphone invalide.', 'error');
-    }
-  };
 
   return (
     <div className={`space-y-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -715,52 +476,21 @@ export const FacturierView = ({ data, setData, onBack, darkMode }: FacturierView
           </div>
         </div>
 
-        {/* SECTION 4 : QUICK ACTIONS AND SHARING */}
+        {/* SECTION 4 : ENREGISTREMENT */}
         <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-3">
           <div className="flex items-center gap-2 pb-1.5 border-b border-gray-50 dark:border-gray-700">
-            <Send className="w-5 h-5 text-orange-500" />
-            <h3 className="font-bold text-sm">Partage & Actions</h3>
+            <Check className="w-5 h-5 text-orange-500" />
+            <h3 className="font-bold text-sm">Enregistrer</h3>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            <button 
-              onClick={handleDownload}
-              className="p-4 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1.5 active:scale-95 transition-all dark:text-white"
-            >
-              <Download className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-              Télécharger (PNG)
-            </button>
-
-            <button 
-              onClick={handleCopyToClipboard}
-              className="p-4 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1.5 active:scale-95 transition-all dark:text-white"
-            >
-              <Copy className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-              Copier le Reçu
-            </button>
-
+          <div className="pt-1">
             <button 
               onClick={handleSaveVente}
-              className="col-span-2 p-5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-100 dark:shadow-none active:scale-95 transition-all"
+              className="w-full p-5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-100 dark:shadow-none active:scale-95 transition-all"
             >
               <Check className="w-4 h-4 shrink-0" />
               Enregistrer la vente
             </button>
-
-            <button 
-              onClick={handleShareWhatsApp}
-              className="col-span-2 p-5 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-green-100 dark:shadow-none active:scale-95 transition-all"
-            >
-              <Send className="w-4 h-4 shrink-0" />
-              Envoyer par WhatsApp
-            </button>
-          </div>
-          
-          <div className="flex gap-2 items-start bg-orange-50/70 dark:bg-orange-950/20 p-3.5 rounded-xl border border-orange-100/50 dark:border-orange-900/30 text-[10px] leading-relaxed text-orange-800 dark:text-orange-300">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <p>
-              <strong>Astuce WhatsApp :</strong> Lorsque vous cliquez sur "Envoyer par WhatsApp", l'application copie automatiquement l'image du reçu dans votre presse-papier. Une fois la discussion WhatsApp ouverte, vous n'avez plus qu'à coller l'image (via le bouton coller ou Ctrl+V) !
-            </p>
           </div>
         </div>
 
