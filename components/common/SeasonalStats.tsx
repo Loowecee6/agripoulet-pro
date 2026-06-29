@@ -45,6 +45,8 @@ const SEASON_INFO: Record<string, { temperature: string; characteristics: string
 };
 
 export const SeasonalStats = ({ data }: SeasonalStatsProps) => {
+  const activeSales = useMemo(() => data.sales.filter(s => !('deletedAt' in s)), [data.sales]);
+
   // ── Sales by month ──
   const monthlySales = useMemo(() => {
     const months = Array.from({ length: 12 }, (_, i) => ({
@@ -56,7 +58,7 @@ export const SeasonalStats = ({ data }: SeasonalStatsProps) => {
       cash: 0,
     }));
 
-    data.sales.forEach(s => {
+    activeSales.forEach(s => {
       const month = getMonth(s.dateVente);
       months[month].total += s.total;
       months[month].count += 1;
@@ -65,7 +67,7 @@ export const SeasonalStats = ({ data }: SeasonalStatsProps) => {
     });
 
     return months;
-  }, [data]);
+  }, [activeSales]);
 
   // ── Sales by season ──
   const seasonalSales = useMemo(() => {
@@ -75,7 +77,7 @@ export const SeasonalStats = ({ data }: SeasonalStatsProps) => {
       'Pluies (hivernage)': { total: 0, count: 0 },
     };
 
-    data.sales.forEach(s => {
+    activeSales.forEach(s => {
       const season = getSeason(getMonth(s.dateVente));
       seasons[season].total += s.total;
       seasons[season].count += 1;
@@ -176,7 +178,7 @@ export const SeasonalStats = ({ data }: SeasonalStatsProps) => {
         </div>
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-3 text-white shadow-sm">
           <div className="text-[9px] text-green-100 uppercase font-black tracking-wider">Total ventes</div>
-          <div className="text-lg font-black mt-1">{data.sales.reduce((s, v) => s + v.total, 0).toLocaleString()}</div>
+          <div className="text-lg font-black mt-1">{activeSales.reduce((s, v) => s + v.total, 0).toLocaleString()}</div>
           <div className="text-xs text-green-100">Frs toutes ventes</div>
         </div>
       </div>
