@@ -83,6 +83,11 @@ export default function App() {
   }, [cloudData?.settings.seasonOffset]);
   const season = useCurrentSeason(seasonOffset);
 
+  // ── Sync darkMode avec class Tailwind ──
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', !!cloudData?.settings.darkMode);
+  }, [cloudData?.settings.darkMode]);
+
   // ── Blocage du rendu tant que la version n'est pas vérifiée ──
   if (!versionChecked) return null;
 
@@ -142,7 +147,9 @@ export default function App() {
 
   const toggleDarkMode = () => {
     if (!cloudData) return;
-    updateData({ ...cloudData, settings: { ...cloudData.settings, darkMode: !cloudData.settings.darkMode } });
+    const next = !cloudData.settings.darkMode;
+    updateData({ ...cloudData, settings: { ...cloudData.settings, darkMode: next } });
+    document.documentElement.classList.toggle('dark', next);
   };
 
   return (
@@ -258,7 +265,7 @@ export default function App() {
             <EcheancesView data={cloudData} />
           )}
           {cloudData && activeTab === 'reservations' && (userPermissions.includes('reservations.create') || userPermissions.includes('reservations.edit')) && (
-            <ReservationView data={cloudData} setData={updateData} />
+            <ReservationView data={cloudData} setData={updateData} darkMode={cloudData.settings.darkMode} />
           )}
           {cloudData && activeTab === 'rapport' && userPermissions.includes('rapports.view') && (
             <RapportView data={cloudData} setData={updateData} user={currentUser} permissions={userPermissions} />

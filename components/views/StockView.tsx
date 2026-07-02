@@ -149,6 +149,16 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
               {can('stock.edit') && (
                 <button onClick={() => setEditingBatch(batch)} className="p-2 text-gray-300 hover:text-orange-500 transition-colors"><Edit2 className="w-5 h-5" /></button>
               )}
+              {can('stock.delete') && !batch.isFinalized && (
+                <button onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`Supprimer le lot "${batch.nom}" ? Cette action est irréversible.`)) {
+                    setData({ ...data, stockBatches: data.stockBatches.filter(b => b.id !== batch.id) });
+                  }
+                }} className="p-2 text-gray-300 hover:text-red-500 transition-colors" title="Supprimer ce lot">
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              )}
               <ChevronRight className="text-gray-300 cursor-pointer" onClick={() => setSelectedBatch(batch)} />
             </div>
           </div>

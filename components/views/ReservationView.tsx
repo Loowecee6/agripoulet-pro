@@ -11,32 +11,21 @@ import { Modal } from '../common/Modal';
 interface ReservationViewProps {
   data: AppData;
   setData: (d: AppData) => void;
+  darkMode?: boolean;
 }
 
-const STATUS_CONFIG: Record<ReservationStatut, { label: string; bg: string; text: string; dot: string }> = {
-  pending: { label: 'En attente', bg: 'bg-yellow-50 border-yellow-200', text: 'text-yellow-700', dot: 'bg-yellow-500' },
-  confirmed: { label: 'Confirmée', bg: 'bg-blue-50 border-blue-200', text: 'text-blue-700', dot: 'bg-blue-500' },
-  cancelled: { label: 'Annulée', bg: 'bg-gray-50 border-gray-200', text: 'text-gray-500', dot: 'bg-gray-400' },
-  completed: { label: 'Terminée', bg: 'bg-green-50 border-green-200', text: 'text-green-700', dot: 'bg-green-500' },
+const STATUS_CONFIG: Record<ReservationStatut, { label: string; bg: string; darkBg: string; border: string; darkBorder: string; text: string; darkText: string; dot: string; darkDot: string }> = {
+  pending: { label: 'En attente', bg: 'bg-yellow-50', darkBg: 'dark:bg-yellow-900/20', border: 'border-yellow-200', darkBorder: 'dark:border-yellow-800', text: 'text-gray-900', darkText: 'dark:text-yellow-300', dot: 'bg-yellow-500', darkDot: 'dark:bg-yellow-400' },
+  confirmed: { label: 'Confirmée', bg: 'bg-blue-50', darkBg: 'dark:bg-blue-900/20', border: 'border-blue-200', darkBorder: 'dark:border-blue-800', text: 'text-gray-900', darkText: 'dark:text-blue-300', dot: 'bg-blue-500', darkDot: 'dark:bg-blue-400' },
+  cancelled: { label: 'Annulée', bg: 'bg-gray-50', darkBg: 'dark:bg-gray-800', border: 'border-gray-200', darkBorder: 'dark:border-gray-700', text: 'text-gray-900', darkText: 'dark:text-gray-400', dot: 'bg-gray-400', darkDot: 'dark:bg-gray-500' },
+  completed: { label: 'Terminée', bg: 'bg-green-50', darkBg: 'dark:bg-green-900/20', border: 'border-green-200', darkBorder: 'dark:border-green-800', text: 'text-gray-900', darkText: 'dark:text-green-300', dot: 'bg-green-500', darkDot: 'dark:bg-green-400' },
 };
 
-export const ReservationView = ({ data, setData }: ReservationViewProps) => {
+export const ReservationView = ({ data, setData, darkMode }: ReservationViewProps) => {
   const { addToast } = useToast();
   const [filter, setFilter] = useState<ReservationStatut | 'all'>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedRes, setSelectedRes] = useState<Reservation | null>(null);
-  const [selectedPouletIds, setSelectedPouletIds] = useState<string[]>([]);
-
-  // ── Get available (non-vendu, non-réservé) chickens ──
-  const reservedPouletIds = useMemo(() =>
-    new Set(data.reservations.filter(r => r.statut !== 'cancelled' && r.statut !== 'completed').flatMap(r => r.pouletIds)),
-  [data.reservations]);
-
-  const availablePoulets = useMemo(() => {
-    return data.stockBatches.flatMap(b =>
-      b.poulets.filter(p => !p.vendu && !reservedPouletIds.has(p.id))
-    );
-  }, [data.stockBatches, reservedPouletIds]);
 
   // ── Filtered list ──
   const filtered = useMemo(() => {
@@ -70,28 +59,16 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const clientId = f.get('clientId') as string;
-    const pouletIdsStr = f.get('pouletIds') as string;
     const dateReserve = f.get('dateReserve') as string;
     const acompte = Number(f.get('acompte')) || 0;
 
-    if (!clientId || !pouletIdsStr || !dateReserve) {
-      return addToast('Veuillez remplir tous les champs obligatoires.', 'error');
-    }
-
     const client = data.clients.find(c => c.id === clientId);
-    if (!client) return addToast('Client invalide.', 'error');
-
-    if (selectedPouletIds.length === 0) return addToast('Sélectionnez au moins un poulet.', 'error');
-    const pouletIds = selectedPouletIds;
-
-    const today = new Date().toISOString().split('T')[0];
-    if (dateReserve <= today) return addToast('La date de réservation doit être dans le futur.', 'error');
 
     const newRes: Reservation = {
       id: crypto.randomUUID(),
-      clientId: client.id,
-      clientNom: client.nom,
-      pouletIds,
+      clientId: client?.id || '',
+      clientNom: client?.nom || (f.get('clientNom') as string) || '',
+      pouletIds: [],
       dateReserve,
       statut: 'pending',
       notes: (f.get('notes') as string) || undefined,
@@ -101,8 +78,7 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
 
     setData({ ...data, reservations: [newRes, ...data.reservations] });
     setIsAddModalOpen(false);
-    setSelectedPouletIds([]);
-    addToast(`Réservation créée pour ${client.nom}`, 'success');
+    addToast(`Réservation créée pour ${client.nom || 'client inconnu'}`, 'success');
   };
 
   // ── Handle Status Change ──
@@ -177,16 +153,16 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
             <div className="text-[7px] text-gray-400 uppercase font-black tracking-wider">Total</div>
           </div>
           <div className="bg-yellow-50 dark:bg-yellow-900/30 rounded-2xl p-3 text-center border border-yellow-100 dark:border-yellow-800">
-            <div className="text-lg font-black text-yellow-700 dark:text-yellow-400">{stats.pending}</div>
-            <div className="text-[7px] text-yellow-600 dark:text-yellow-500 uppercase font-black tracking-wider">En attente</div>
+            <div className="text-lg font-black text-gray-900 dark:text-yellow-400">{stats.pending}</div>
+            <div className="text-[7px] text-gray-500 dark:text-yellow-500 uppercase font-black tracking-wider">En attente</div>
           </div>
           <div className="bg-blue-50 dark:bg-blue-900/30 rounded-2xl p-3 text-center border border-blue-100 dark:border-blue-800">
-            <div className="text-lg font-black text-blue-700 dark:text-blue-400">{stats.confirmed}</div>
-            <div className="text-[7px] text-blue-600 dark:text-blue-500 uppercase font-black tracking-wider">Confirmées</div>
+            <div className="text-lg font-black text-gray-900 dark:text-blue-400">{stats.confirmed}</div>
+            <div className="text-[7px] text-gray-500 dark:text-blue-500 uppercase font-black tracking-wider">Confirmées</div>
           </div>
           <div className="bg-orange-50 dark:bg-orange-900/30 rounded-2xl p-3 text-center border border-orange-100 dark:border-orange-800">
-            <div className="text-lg font-black text-orange-700 dark:text-orange-400">{stats.today}</div>
-            <div className="text-[7px] text-orange-600 dark:text-orange-500 uppercase font-black tracking-wider">Aujourd'hui</div>
+            <div className="text-lg font-black text-gray-900 dark:text-orange-400">{stats.today}</div>
+            <div className="text-[7px] text-gray-500 dark:text-orange-500 uppercase font-black tracking-wider">Aujourd'hui</div>
           </div>
         </div>
       )}
@@ -222,18 +198,18 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
             <div
               key={r.id}
               onClick={() => setSelectedRes(r)}
-              className={`bg-white dark:bg-gray-800 rounded-3xl border p-4 shadow-sm cursor-pointer active:scale-[0.98] transition-transform ${cfg.bg.replace('bg-', 'dark:bg-').replace('border-', 'dark:border-')} ${
+              className={`bg-white dark:bg-gray-800 rounded-3xl border p-4 shadow-sm cursor-pointer active:scale-[0.98] transition-transform ${cfg.bg} ${cfg.darkBg} ${cfg.border} ${cfg.darkBorder} ${
                 isPast && (r.statut === 'pending') ? 'border-red-200 dark:border-red-800 ring-1 ring-red-200 dark:ring-red-800' : ''
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${cfg.dot.replace('bg-', 'bg-')}/20`}>
-                  <CalendarDays className={`w-5 h-5 ${cfg.text}`} />
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${cfg.dot} ${cfg.darkDot}/20`}>
+                  <CalendarDays className={`w-5 h-5 ${cfg.text} ${cfg.darkText}`} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-gray-800 dark:text-white truncate">{r.clientNom}</span>
-                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase ${cfg.bg.split(' ')[0]} ${cfg.text}`}>
+                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase ${cfg.bg} ${cfg.darkBg} ${cfg.text} ${cfg.darkText}`}>
                       {cfg.label}
                     </span>
                     {isToday && r.statut !== 'completed' && r.statut !== 'cancelled' && (
@@ -243,7 +219,7 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
-                    <span className="flex items-center gap-1"><CalendarDays className="w-3 h-3" /> {formatDateShort(r.dateReserve)}</span>
+                    <span className="flex items-center gap-1"><CalendarDays className="w-3 h-3" /> {r.dateReserve ? formatDateShort(r.dateReserve) : '—'}</span>
                     <span>•</span>
                     <span>{chickens.length} poulet(s)</span>
                     {r.acompte && (
@@ -268,58 +244,32 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
       </div>
 
       {/* ── Create Reservation Modal ── */}
-      <Modal isOpen={isAddModalOpen} onClose={() => { setIsAddModalOpen(false); setSelectedPouletIds([]); }} title="Nouvelle Réservation">
+      <Modal isOpen={isAddModalOpen} onClose={() => { setIsAddModalOpen(false); }} title="Nouvelle Réservation">
         <form onSubmit={handleCreate} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Client *</label>
-            <select name="clientId" required className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm appearance-none dark:border-gray-600 dark:text-white">
-              <option value="">Choisir un client</option>
+            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Client (optionnel)</label>
+            <select name="clientId" className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm appearance-none dark:border-gray-600 dark:text-white">
+              <option value="">Sélectionner un client</option>
               {data.clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
             </select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Date de retrait *</label>
             <input
-              name="dateReserve"
-              type="date"
-              required
-              min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
-              className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none dark:border-gray-600 dark:text-white"
+              name="clientNom"
+              type="text"
+              placeholder="Ou saisir un nom libre"
+              className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none text-sm dark:border-gray-600 dark:text-white mt-2"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Poulets disponibles ({availablePoulets.length})</label>
-            <div className="max-h-48 overflow-y-auto border border-gray-100 dark:border-gray-700 rounded-2xl p-2 bg-gray-50 dark:bg-gray-800/50 space-y-1">
-              {availablePoulets.length === 0 ? (
-                <p className="text-center text-xs text-gray-400 py-4 italic">Aucun poulet disponible</p>
-              ) : (
-                availablePoulets.map(p => {
-                  const isChecked = selectedPouletIds.includes(p.id);
-                  return (
-                    <label key={p.id} className={`flex items-center gap-3 p-2.5 bg-white dark:bg-gray-800 rounded-xl border text-xs cursor-pointer hover:bg-orange-50 dark:hover:bg-gray-700 transition-colors ${isChecked ? 'border-orange-300 ring-1 ring-orange-200' : 'border-gray-100 dark:border-gray-700'}`}>
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedPouletIds(prev => [...prev, p.id]);
-                          } else {
-                            setSelectedPouletIds(prev => prev.filter(id => id !== p.id));
-                          }
-                        }}
-                        className="accent-orange-600 w-4 h-4 rounded"
-                      />
-                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-black tracking-wider bg-orange-100 text-orange-700">{p.numero}</span>
-                      <span className="text-gray-500">{p.poids} kg</span>
-                      <span className="ml-auto font-bold text-orange-600">{p.prix} F</span>
-                    </label>
-                  );
-                })
-              )}
-            </div>
+            <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Date de retrait (optionnel)</label>
+            <input
+              name="dateReserve"
+              type="date"
+              className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none dark:border-gray-600 dark:text-white"
+            />
           </div>
+
+
 
           <div className="space-y-1">
             <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Acompte (optionnel)</label>
@@ -361,13 +311,13 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
           return (
             <div className="space-y-5">
               {/* Status header */}
-              <div className={`rounded-3xl p-5 border ${cfg.bg}`}>
+              <div className={`rounded-3xl p-5 border ${cfg.bg} ${cfg.darkBg} ${cfg.border} ${cfg.darkBorder}`}>
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <h3 className="text-lg font-black text-gray-900 dark:text-white">{selectedRes.clientNom}</h3>
                     <div className="text-xs text-gray-500 mt-0.5">Créé le {formatDateShort(selectedRes.createdAt)}</div>
                   </div>
-                  <span className={`text-[9px] font-black px-3 py-1.5 rounded-full uppercase ${cfg.bg.split(' ')[0]} ${cfg.text}`}>
+                  <span className={`text-[9px] font-black px-3 py-1.5 rounded-full uppercase ${cfg.bg} ${cfg.darkBg} ${cfg.text} ${cfg.darkText}`}>
                     {cfg.label}
                   </span>
                 </div>
@@ -378,7 +328,7 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
                       <CalendarDays className="w-3.5 h-3.5" />
                       <span className="font-bold uppercase">Retrait prévu</span>
                     </div>
-                    <div className="text-sm font-black">{formatDateLong(selectedRes.dateReserve)}</div>
+                    <div className="text-sm font-black">{selectedRes.dateReserve ? formatDateLong(selectedRes.dateReserve) : 'Non définie'}</div>
                   </div>
                   <div className="bg-white/70 dark:bg-gray-800/70 rounded-xl p-3">
                     <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mb-1">
@@ -395,7 +345,7 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
 
               {/* Chickens list */}
               <div>
-                <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                <h4 className="text-xs font-bold text-gray-900 dark:text-gray-300 mb-2 flex items-center gap-2">
                   <UserIcon className="w-4 h-4 text-orange-500" />
                   Poulets réservés ({chickens.length})
                 </h4>
@@ -416,10 +366,10 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
               {selectedRes.notes && (
                 <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-100 dark:border-yellow-800 rounded-2xl p-3">
                   <div className="flex items-center gap-1.5 mb-1">
-                    <FileText className="w-3.5 h-3.5 text-yellow-600" />
-                    <span className="text-[9px] font-black text-yellow-700 uppercase">Notes</span>
+                    <FileText className="w-3.5 h-3.5 text-gray-500 dark:text-yellow-600" />
+                    <span className="text-[9px] font-black text-gray-900 dark:text-yellow-700 uppercase">Notes</span>
                   </div>
-                  <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{selectedRes.notes}</p>
+                  <p className="text-xs text-gray-900 dark:text-gray-300 whitespace-pre-wrap">{selectedRes.notes}</p>
                 </div>
               )}
 
@@ -468,7 +418,8 @@ export const ReservationView = ({ data, setData }: ReservationViewProps) => {
                   if (!client?.tel) return null;
                   const digits = client.tel.replace(/\D/g, '');
                   const international = digits.startsWith('225') ? digits : `225${digits.replace(/^0+/, '')}`;
-                  const msg = `Bonjour ${selectedRes.clientNom} 👋\n\nJe vous rappelle que votre réservation de ${chickens.length} poulet(s) est prévue pour le ${formatDateShort(selectedRes.dateReserve)}.\n\nMerci de confirmer votre venue. 🙏`;
+                  const dateLabel = selectedRes.dateReserve ? `pour le ${formatDateShort(selectedRes.dateReserve)}` : 'à venir';
+                  const msg = `Bonjour ${selectedRes.clientNom} 👋\n\nJe vous rappelle que votre réservation de ${chickens.length} poulet(s) est prévue ${dateLabel}.\n\nMerci de confirmer votre venue. 🙏`;
                   return (
                     <a
                       href={`https://wa.me/${international}?text=${encodeURIComponent(msg)}`}
