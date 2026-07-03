@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ClipboardList, Loader2, AlertCircle, UserPlus, LogIn } from 'lucide-react';
+import { ClipboardList, Loader2, AlertCircle, UserPlus, LogIn, Beaker } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 
 type Mode = 'login' | 'register';
@@ -139,7 +139,19 @@ export const LoginScreen: React.FC = () => {
           {mode === 'login' ? 'Pas encore de compte ? Créer un compte' : 'Déjà un compte ? Se connecter'}
         </button>
 
-        <p className="mt-12 text-[9px] text-orange-300 font-bold uppercase tracking-widest">
+        <button
+          type="button"
+          onClick={() => {
+            localStorage.setItem('sandbox_mode', 'true');
+            window.location.reload();
+          }}
+          className="mt-6 w-full flex items-center justify-center gap-2 bg-gray-200 text-gray-500 p-3 rounded-2xl font-bold text-[10px] uppercase tracking-widest hover:bg-gray-300 hover:text-gray-700 transition-all active:scale-95"
+        >
+          <Beaker className="w-4 h-4" />
+          Mode Test Local (Sandbox)
+        </button>
+
+        <p className="mt-6 text-[9px] text-orange-300 font-bold uppercase tracking-widest">
           Cloud Google Infrastructure • Real-time Sync
         </p>
       </div>

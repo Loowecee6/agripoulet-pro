@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, ChevronRight, CheckCircle2, Trash2, Edit2, Printer } from 'lucide-react';
+import { Plus, ChevronRight, CheckCircle2, Trash2, Edit2, Printer, Coins, Upload } from 'lucide-react';
 import { printChickenLabels } from '../../utils/labelPrint';
-import { AppData, User, StockBatch, Chicken } from '../../types';
+import { AppData, User, StockBatch, Chicken, Expense } from '../../types';
 import { Modal } from '../common/Modal';
+import { parseXLSXFile } from '../../utils/importXLS';
 
 interface StockViewProps {
   data: AppData;
@@ -18,6 +19,13 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
   const [editingBatch, setEditingBatch] = useState<StockBatch | null>(null);
   const [editingChicken, setEditingChicken] = useState<{ id: string; chicken: Chicken } | null>(null);
   
+  const [stockTab, setStockTab] = useState<'poulets' | 'depenses'>('poulets');
+  const [editingExpense, setEditingExpense] = useState<{ index: number; expense: Expense } | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [tempExpenseLibelle, setTempExpenseLibelle] = useState('');
+  const [tempExpenseMontant, setTempExpenseMontant] = useState('');
+  const [tempExpenseDate, setTempExpenseDate] = useState(new Date().toISOString().split('T')[0]);
+
   // États locaux pour le calcul automatique réciproque
   const [tempPoids, setTempPoids] = useState<string>('');
   const [tempPrix, setTempPrix] = useState<string>('');
@@ -190,9 +198,20 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
         </form>
       </Modal>
 
-      <Modal isOpen={!!selectedBatch} onClose={() => { setSelectedBatch(null); setTempPoids(''); setTempPrix(''); }} title={selectedBatch?.nom || ""}>
+      <Modal isOpen={!!selectedBatch} onClose={() => { setSelectedBatch(null); setTempPoids(''); setTempPrix(''); setStockTab('poulets'); }} title={selectedBatch?.nom || ""}>
         {selectedBatch && (
           <div className="space-y-6">
+            <div className="flex bg-gray-100 p-1 rounded-xl">
+              <button onClick={() => setStockTab('poulets')} className={`flex-1 py-2 text-xs font-bold rounded-lg capitalize transition-all ${stockTab === 'poulets' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500'}`}>
+                Poulets
+              </button>
+              <button onClick={() => setStockTab('depenses')} className={`flex-1 py-2 text-xs font-bold rounded-lg capitalize transition-all flex items-center justify-center gap-1 ${stockTab === 'depenses' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500'}`}>
+                <Coins className="w-3.5 h-3.5" /> Dépenses
+              </button>
+            </div>
+
+            {stockTab === 'poulets' && (
+            <>
             {/* Lot groupé (abattage partiel en nombre) */}
             {selectedBatch.quantite ? (
               <div className="bg-orange-50 border-2 border-orange-200 p-4 rounded-3xl space-y-3">
@@ -381,6 +400,135 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
                 Supprimer le lot
               </button>
             )}
+            </>
+            )}
+
+            {stockTab === 'depenses' && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase">Dépenses du lot</h4>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      id="import-stock-xlsx"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setIsImporting(true);
+                        try {
+                          const imported = await parseXLSXFile(file);
+                          if (imported.length === 0) {
+                            alert('Aucune dépense trouvée dans le fichier.');
+                            return;
+                          }
+                          if (!confirm(`Importer ${imported.length} dépense(s) depuis "${file.name}" ?`)) return;
+                          const updated = {
+                            ...selectedBatch,
+                            depenses: [...(selectedBatch.depenses || []), ...imported],
+                          };
+                          setData({ ...data, stockBatches: data.stockBatches.map(b => b.id === updated.id ? updated : b) });
+                          setSelectedBatch(updated);
+                          alert(`${imported.length} dépense(s) importée(s) avec succès.`);
+                        } catch (err: any) {
+                          alert(err.message || 'Erreur lors de l\'import.');
+                        } finally {
+                          setIsImporting(false);
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => document.getElementById('import-stock-xlsx')?.click()}
+                      disabled={isImporting}
+                      className="flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                      <Upload className="w-3 h-3" /> {isImporting ? 'Import...' : 'Importer XLSX'}
+                    </button>
+                  </div>
+                </div>
+
+                {(selectedBatch.depenses || []).length === 0 && (
+                  <p className="text-center text-xs text-gray-300 py-4 italic">Aucune dépense enregistrée pour ce lot.</p>
+                )}
+
+                {(selectedBatch.depenses || []).length > 0 && (
+                  <>
+                    <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 flex justify-between items-center">
+                      <span className="text-sm font-bold text-orange-700">Total dépenses</span>
+                      <span className="text-lg font-black text-orange-700">
+                        {selectedBatch.depenses!.reduce((a, d) => a + d.montant, 0).toLocaleString('fr-FR')} F
+                      </span>
+                    </div>
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {selectedBatch.depenses!.map((d, idx) => (
+                        <div key={d.id} className="flex justify-between items-center p-3 border border-gray-100 rounded-xl text-xs bg-white">
+                          <div className="flex-1">
+                            <span className="text-gray-600 font-medium">{d.libelle}</span>
+                            <span className="text-gray-400 ml-2">({d.date})</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold">{d.montant.toLocaleString('fr-FR')} F</span>
+                            <button onClick={() => setEditingExpense({ index: idx, expense: d })} className="p-1 text-gray-300 hover:text-orange-500 transition-colors"><Edit2 className="w-4 h-4" /></button>
+                            <button onClick={() => {
+                              if (!confirm(`Supprimer la dépense "${d.libelle}" ?`)) return;
+                              const newDepenses = [...(selectedBatch.depenses || [])];
+                              newDepenses.splice(idx, 1);
+                              const updated = { ...selectedBatch, depenses: newDepenses };
+                              setData({ ...data, stockBatches: data.stockBatches.map(b => b.id === updated.id ? updated : b) });
+                              setSelectedBatch(updated);
+                            }} className="p-1 text-gray-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                <form className="bg-blue-50 p-4 rounded-3xl space-y-2" onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!tempExpenseLibelle || !tempExpenseMontant) return;
+                  const exp: Expense = {
+                    id: crypto.randomUUID(),
+                    libelle: tempExpenseLibelle,
+                    montant: Number(tempExpenseMontant),
+                    date: tempExpenseDate,
+                  };
+                  const updated = {
+                    ...selectedBatch,
+                    depenses: [...(selectedBatch.depenses || []), exp],
+                  };
+                  setData({ ...data, stockBatches: data.stockBatches.map(b => b.id === updated.id ? updated : b) });
+                  setSelectedBatch(updated);
+                  setTempExpenseLibelle('');
+                  setTempExpenseMontant('');
+                  setTempExpenseDate(new Date().toISOString().split('T')[0]);
+                }}>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      value={tempExpenseLibelle}
+                      onChange={(e) => setTempExpenseLibelle(e.target.value)}
+                      required placeholder="Libellé dépense"
+                      className="col-span-2 p-3 border rounded-xl text-sm bg-white"
+                    />
+                    <input
+                      value={tempExpenseMontant}
+                      onChange={(e) => setTempExpenseMontant(e.target.value)}
+                      type="number" min="0" required placeholder="Montant Frs"
+                      className="p-3 border rounded-xl text-sm bg-white"
+                    />
+                    <input
+                      value={tempExpenseDate}
+                      onChange={(e) => setTempExpenseDate(e.target.value)}
+                      type="date"
+                      className="p-3 border rounded-xl text-sm bg-white"
+                    />
+                  </div>
+                  <button type="submit" className="w-full bg-blue-600 text-white p-3 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform">Ajouter dépense</button>
+                </form>
+              </div>
+            )}
           </div>
         )}
       </Modal>
@@ -445,6 +593,36 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
               </div>
             </div>
             <button type="submit" className="w-full bg-gray-900 text-white p-4 rounded-2xl font-bold shadow-lg">Enregistrer</button>
+          </form>
+        )}
+      </Modal>
+
+      {/* Edit Expense Modal */}
+      <Modal isOpen={!!editingExpense} onClose={() => setEditingExpense(null)} title="Modifier la Dépense">
+        {editingExpense && (
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const f = new FormData(e.currentTarget);
+            const updatedExpense: Expense = {
+              ...editingExpense.expense,
+              libelle: f.get('libelle') as string,
+              montant: Number(f.get('montant')),
+              date: f.get('date') as string,
+            };
+            if (!selectedBatch) return;
+            const newDepenses = [...(selectedBatch.depenses || [])];
+            newDepenses[editingExpense.index] = updatedExpense;
+            const updatedBatch = { ...selectedBatch, depenses: newDepenses };
+            setData({ ...data, stockBatches: data.stockBatches.map(b => b.id === updatedBatch.id ? updatedBatch : b) });
+            setSelectedBatch(updatedBatch);
+            setEditingExpense(null);
+          }} className="space-y-3">
+            <input name="libelle" required defaultValue={editingExpense.expense.libelle} placeholder="Libellé dépense" className="w-full p-3 border rounded-xl text-sm bg-white" />
+            <div className="grid grid-cols-2 gap-2">
+              <input name="montant" type="number" min="0" required defaultValue={editingExpense.expense.montant} placeholder="Prix Frs" className="p-3 border rounded-xl text-sm bg-white" />
+              <input name="date" type="date" defaultValue={editingExpense.expense.date} className="p-3 border rounded-xl text-sm bg-white" />
+            </div>
+            <button type="submit" className="w-full bg-gray-900 text-white p-3 rounded-xl font-bold text-sm">Enregistrer</button>
           </form>
         )}
       </Modal>

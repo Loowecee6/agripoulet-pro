@@ -31,6 +31,10 @@ export const AuthProvider: React.FC<ProviderProps> = ({ children }) => {
   const [signUpError, setSignUpError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (localStorage.getItem('sandbox_mode') === 'true') {
+      setUser({ uid: 'sandbox-user', email: 'test@local.dev', displayName: 'Test Local' } as User);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
     });

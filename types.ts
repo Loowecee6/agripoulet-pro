@@ -162,6 +162,7 @@ export interface StockBatch {
   isFinalized: boolean;
   quantite?: number;
   poidsTotal?: number;
+  depenses?: Expense[];
 }
 
 export interface Client {

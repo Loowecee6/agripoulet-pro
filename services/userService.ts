@@ -22,6 +22,9 @@ const DEFAULT_ROLE: UserRole = 'viewer';
  * Retourne 'viewer' par défaut si le document n'existe pas.
  */
 export async function getUserRole(uid: string, email?: string, displayName?: string): Promise<UserRole> {
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('sandbox_mode') === 'true') {
+    return 'super_admin';
+  }
   try {
     const userDoc = doc(db, 'users', uid);
     const snap = await getDoc(userDoc);
