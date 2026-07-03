@@ -17,17 +17,6 @@ export function useRealtimeData(user: { uid: string } | null) {
       return;
     }
 
-    const isSandbox = localStorage.getItem('sandbox_mode') === 'true';
-    if (isSandbox) {
-      import('../utils/testData').then(({ getTestData }) => {
-        const td = getTestData();
-        setData(td);
-        prevDataRef.current = td;
-        setIsLoading(false);
-      });
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
 
@@ -51,12 +40,6 @@ export function useRealtimeData(user: { uid: string } | null) {
   }, [user]);
 
   const updateData = useCallback((newData: AppData) => {
-    const isSandbox = localStorage.getItem('sandbox_mode') === 'true';
-    if (isSandbox) {
-      setData(newData);
-      prevDataRef.current = newData;
-      return;
-    }
     const oldData = prevDataRef.current;
     if (oldData) {
       prevDataRef.current = newData;
