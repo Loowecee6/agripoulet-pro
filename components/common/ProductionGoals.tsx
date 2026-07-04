@@ -12,10 +12,10 @@ interface ProductionGoalsProps {
 
 // Objectifs par défaut configurables
 const DEFAULT_TARGETS = {
-  targetWeightDay42: 2500,    // poids cible à J42 (g)
+  targetWeightDay42: 2740,    // poids cible à J42 — vif (g) (≈2000g vidé)
   maxMortalityRate: 5,        // taux de mortalité max (%)
   targetFCR: 1.8,             // Feed Conversion Ratio cible
-  targetAvgPricePerKg: 2500,  // prix moyen cible par kg (Frs)
+  targetAvgPricePerKg: 2645,  // prix moyen cible par kg (Frs)
   targetSurvivalRate: 95,     // taux de survie cible (%)
 };
 
@@ -172,7 +172,7 @@ export const ProductionGoals = ({ data }: ProductionGoalsProps) => {
             <div className="flex items-end justify-between mb-2">
               <div>
                 <div className="text-lg font-black">{goals.bestBatchWeight}g</div>
-                <div className="text-[9px] opacity-70">Objectif J42: {goals.targets.targetWeightDay42}g</div>
+                <div className="text-[9px] opacity-70">Objectif J42: {goals.targets.targetWeightDay42}g vif (≈{Math.round(goals.targets.targetWeightDay42 * 0.73)}g vidé)</div>
               </div>
               <div className="text-right">
                 <div className="text-lg font-black">{goals.weightProgress}%</div>

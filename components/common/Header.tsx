@@ -36,6 +36,7 @@ const notifIcons: Record<string, React.ReactNode> = {
   vaccination: <Syringe className="w-3.5 h-3.5" />,
   mortalite: <AlertTriangle className="w-3.5 h-3.5" />,
   credit: <CreditCard className="w-3.5 h-3.5" />,
+  production: <Bell className="w-3.5 h-3.5" />,
 };
 
 const severityColors: Record<string, { bg: string; border: string; text: string; dot: string }> = {

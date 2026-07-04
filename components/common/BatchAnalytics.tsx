@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { AlertTriangle, TrendingUp, Calendar, BarChart3, Target, Droplets, AlertCircle, CheckCircle } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Calendar, BarChart3, Target, Droplets, AlertCircle, CheckCircle, Bell } from 'lucide-react';
 import { ProductionBatch } from '../../types';
 import { POIDS_THEORIQUE_REFERENCE } from '../../constants';
 
@@ -43,8 +43,8 @@ export function BatchAnalytics({ batches }: BatchAnalyticsProps) {
         return maxDay <= today;
       });
 
-      // Prévision date de vente (poids cible 2.5kg = 2500g)
-      const targetWeight = 2500;
+      // Prévision date de vente (poids cible 2.0kg vidé ≈ 2740g vif)
+      const targetWeight = 2740;
       let predictedDay: number | null = null;
       if (lastRecord && lastRecord.poidsReel > 0) {
         // Linear extrapolation based on current growth rate
@@ -183,7 +183,7 @@ export function BatchAnalytics({ batches }: BatchAnalyticsProps) {
             <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 flex items-center gap-3">
               <Calendar className="w-5 h-5 text-purple-500 shrink-0" />
               <div>
-                <div className="text-[10px] font-black text-purple-400 uppercase">Prévision poids cible (2.5 kg)</div>
+                  <div className="text-[10px] font-black text-purple-400 uppercase">Prévision poids cible (2.0 kg vidé)</div>
                 <div className="text-sm font-bold text-purple-800">
                   Vers J{a.predictedDay} ({a.predictedDay - a.currentDay > 0 ? `dans ${a.predictedDay - a.currentDay} jours` : 'atteint !'})
                 </div>
@@ -196,6 +196,35 @@ export function BatchAnalytics({ batches }: BatchAnalyticsProps) {
             <span className="text-gray-500">Survivants</span>
             <span className="font-bold">{a.survivingBirds} / {a.batch.nbPoussinsInitial}</span>
           </div>
+
+          {/* Conseil période critique J28+ */}
+          {a.currentDay >= 28 && (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-amber-600" />
+                <span className="text-xs font-black text-amber-800 uppercase">Période critique J28+</span>
+              </div>
+              <ul className="text-[11px] text-amber-900 space-y-1 list-disc list-inside">
+                <li>Le poulet double son poids en 2 semaines — l'alimentation est capitale</li>
+                <li>Vérifie que les <strong>mangeoires</strong> ne sont jamais vides</li>
+                <li>L'<strong>eau</strong> doit être fraîche et abondante (stress thermique élevé)</li>
+                <li>Surveille la <strong>consommation</strong> : elle doit augmenter chaque jour</li>
+                <li>Nettoie les <strong>abreuvoirs</strong> quotidiennement</li>
+              </ul>
+            </div>
+          )}
+          {a.currentDay >= 21 && a.currentDay < 28 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Bell className="w-4 h-4 text-blue-500" />
+                <span className="text-[10px] font-black text-blue-700 uppercase">Prépare la période critique J28+</span>
+              </div>
+              <p className="text-[10px] text-blue-800">
+                Dans {28 - a.currentDay} jour(s), les poulets entrent en phase de croissance explosive.
+                Anticipe le stock d'aliment et vérifie le système d'abreuvement.
+              </p>
+            </div>
+          )}
         </div>
       ))}
 

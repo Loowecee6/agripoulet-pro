@@ -1,14 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Users, Coins, TrendingUp, MessageSquare, CheckCircle2, Edit2, Trash2, Download, BarChart3 } from 'lucide-react';
+import { Plus, Users, Coins, TrendingUp, MessageSquare, CheckCircle2, Edit2, Trash2, Download, BarChart3, Bell } from 'lucide-react';
 import { useToast } from '../common/ToastContext';
 import { AppData, User, ProductionBatch, DailyRecord, Expense, StockBatch, Chicken } from '../../types';
-import { PROGRAMME_VACCINATION, POIDS_THEORIQUE_REFERENCE } from '../../constants';
+import { PROGRAMME_VACCINATION, POIDS_THEORIQUE_REFERENCE, POIDS_CIBLE_J42 } from '../../constants';
 import { formatDateShort } from '../../utils/dateFormat';
 import { Modal } from '../common/Modal';
 import { exportBatchExpenses } from '../../utils/exportXLS';
 import { BatchAnalytics } from '../common/BatchAnalytics';
 import { 
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, 
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis, ReferenceArea,
   CartesianGrid, Tooltip, Legend 
 } from 'recharts';
 
@@ -81,7 +81,7 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
     const lastDaySaisi = selectedBatch.suiviQuotidien.length > 0 
       ? Math.max(...selectedBatch.suiviQuotidien.map(r => r.jourDeBande))
       : 1;
-    const maxDay = Math.max(lastDaySaisi, 7);
+    const maxDay = Math.max(lastDaySaisi, 42);
     const chartData = [];
     for (let j = 1; j <= maxDay; j++) {
       const actualRecord = selectedBatch.suiviQuotidien.find(r => r.jourDeBande === j);
@@ -93,6 +93,11 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
     }
     return chartData;
   }, [selectedBatch]);
+
+  const jourCritiqueDebut = 28;
+  const estEnPeriodeCritique = selectedBatch
+    && selectedBatch.suiviQuotidien.length > 0
+    && Math.max(...selectedBatch.suiviQuotidien.map(r => r.jourDeBande)) >= jourCritiqueDebut;
 
   return (
     <div className="space-y-6">
@@ -161,24 +166,49 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
 
             {batchTab === 'suivi' && (
               <div className="space-y-6">
-                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                  <h4 className="text-xs font-bold text-gray-400 uppercase mb-4 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-orange-500" /> Poids réel vs théorique (g)
-                  </h4>
-                  <div className="h-48 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={growthChartData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="jour" tick={{fontSize: 10}} axisLine={false} tickLine={false} />
-                        <YAxis tick={{fontSize: 10}} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                        <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
-                        <Line name="Théorique" type="monotone" dataKey="theorique" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-                        <Line name="Réel" type="monotone" dataKey="reel" stroke="#f97316" strokeWidth={3} dot={{ fill: '#f97316', r: 4 }} activeDot={{ r: 6 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
+                  <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-4 flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-orange-500" /> Poids réel vs théorique (g)
+                    </h4>
+                    <div className="h-48 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={growthChartData}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis dataKey="jour" tick={{fontSize: 10}} axisLine={false} tickLine={false} interval={Math.max(1, Math.floor(growthChartData.length / 10))} />
+                          <YAxis tick={{fontSize: 10}} axisLine={false} tickLine={false} />
+                          <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                          <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+                          <ReferenceArea x1="J28" x2={`J${growthChartData.length > 28 ? growthChartData.length : 42}`} fill="#fef3c7" fillOpacity={0.3} />
+                          <Line name="Théorique" type="monotone" dataKey="theorique" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                          <Line name="Réel" type="monotone" dataKey="reel" stroke="#f97316" strokeWidth={3} dot={{ fill: '#f97316', r: 4 }} activeDot={{ r: 6 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <div className="w-3 h-3 rounded bg-amber-100 border border-amber-300" />
+                      <span className="text-[9px] text-amber-700">Période critique J28+ — surveillance aliment/eau renforcée</span>
+                    </div>
                   </div>
-                </div>
+
+                  {/* Bannière période critique */}
+                  {estEnPeriodeCritique && (
+                    <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Bell className="w-5 h-5 text-amber-600" />
+                        <h4 className="text-sm font-black text-amber-800 uppercase">Période critique — J28+</h4>
+                      </div>
+                      <p className="text-xs text-amber-900">
+                        Les poulets doublent leur poids en 2 semaines. Assure une alimentation et un abreuvement irréprochables.
+                      </p>
+                      <ul className="text-xs text-amber-800 space-y-1 ml-5 list-disc">
+                        <li>Vérifie les <strong>mangeoires</strong> 2× par jour</li>
+                        <li><strong>Eau fraîche</strong> en abondance — nettoie les abreuvoirs quotidiennement</li>
+                        <li>La <strong>consommation</strong> doit augmenter chaque jour</li>
+                        <li>Surveille le <strong>comportement</strong> : les poulets doivent être actifs</li>
+                        <li>Réduis le <strong>stress thermique</strong> : ventilation, ombre, litière sèche</li>
+                      </ul>
+                    </div>
+                  )}
 
                 <form className="bg-orange-50 p-4 rounded-3xl grid grid-cols-2 gap-2" onSubmit={(e) => {
                   e.preventDefault();
@@ -339,7 +369,7 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
                         typeOrigine: 'PR',
                         lettre: letter,
                         nom: `Bande ${selectedBatch.nom}`,
-                        prixKg: 2500,
+                        prixKg: 2690,
                         coutInitial: coutInitial,
                         poulets: [],
                         isFinalized: false
@@ -482,7 +512,7 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
             e.preventDefault();
             const f = new FormData(e.currentTarget);
             const quantite = parseInt(f.get('quantite') as string);
-            const prixKg = parseInt(f.get('prixKg') as string) || 2500;
+            const prixKg = parseInt(f.get('prixKg') as string) || 2690;
             const poidsTotal = parseFloat(f.get('poidsTotal') as string) || 0;
             if (isNaN(quantite) || quantite <= 0) return;
 
@@ -550,7 +580,7 @@ export const ProductionView = ({ data, setData, user, permissions }: ProductionV
             <div className="space-y-1">
               <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Prix au kilo (FCFA/kg)</label>
               <input 
-                name="prixKg" type="number" min="0" defaultValue="2500"
+                name="prixKg" type="number" min="0" defaultValue="2690"
                 className="w-full p-4 border border-gray-200 rounded-2xl text-sm outline-none bg-gray-50"
               />
             </div>

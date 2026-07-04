@@ -52,7 +52,7 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
       nom: f.get('nom') as string,
       typeOrigine: (f.get('typeOrigine') as 'PR' | 'IM') || 'PR',
       lettre: (f.get('lettre') as string || 'S').toUpperCase(),
-      prixKg: Number(f.get('prixKg')) || 2500,
+      prixKg: Number(f.get('prixKg')) || 2690,
       coutInitial: Number(f.get('cout')) || 0,
       poulets: [],
       isFinalized: false
@@ -191,7 +191,7 @@ export const StockView = ({ data, setData, user, permissions }: StockViewProps) 
           <input name="nom" required placeholder="Nom du lot (ex: Lot Poulets Adultes)" className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none dark:border-gray-600 dark:text-white" />
           <div className="grid grid-cols-2 gap-4">
             <input name="lettre" maxLength={1} placeholder="Lettre (ex: A, B, C)" className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none dark:border-gray-600 dark:text-white" />
-            <input name="prixKg" type="number" min="0" placeholder="Prix/Kg (défaut: 2500)" className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none dark:border-gray-600 dark:text-white" />
+            <input name="prixKg" type="number" min="0" placeholder="Prix/Kg (défaut: 2690)" className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none dark:border-gray-600 dark:text-white" />
           </div>
           <input name="cout" type="number" min="0" placeholder="Coût d'achat total (si applicable)" className="w-full p-4 border rounded-2xl bg-gray-50 dark:bg-gray-800 outline-none dark:border-gray-600 dark:text-white" />
           <button type="submit" className="w-full bg-orange-600 text-white p-4 rounded-2xl font-bold shadow-lg shadow-orange-100 dark:shadow-none">Créer le lot</button>

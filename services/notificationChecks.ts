@@ -9,7 +9,7 @@ import { AppData } from '../types';
 // Types de notifications
 export interface NotificationEvent {
   id: string;
-  type: 'vaccination' | 'mortalite' | 'credit';
+  type: 'vaccination' | 'mortalite' | 'credit' | 'production';
   title: string;
   body: string;
   severity: 'info' | 'warning' | 'danger';
@@ -172,6 +172,47 @@ function checkCreditDeadlines(data: AppData): CheckResult {
 }
 
 /**
+ * Vérifie la période critique J28+ pour les bandes actives
+ * Rappelle de surveiller alimentation et eau en phase de croissance explosive
+ */
+function checkProductionCriticalPeriod(data: AppData): CheckResult {
+  const results: CheckResult = [];
+
+  for (const batch of data.productionBatches) {
+    if (batch.statut !== 'active') continue;
+    if (batch.suiviQuotidien.length === 0) continue;
+
+    const currentDay = Math.max(...batch.suiviQuotidien.map(r => r.jourDeBande));
+
+    if (currentDay >= 28) {
+      results.push({
+        id: `crit-period-${batch.id}`,
+        type: 'production',
+        title: '🔔 Période critique J28+',
+        body: `"${batch.nom}" : phase de croissance explosive — surveille alimentation et eau quotidiennement`,
+        severity: 'warning',
+        date: new Date(),
+        link: 'production',
+      });
+    }
+
+    if (currentDay >= 21 && currentDay < 28) {
+      results.push({
+        id: `crit-prep-${batch.id}`,
+        type: 'production',
+        title: '📋 Prépare la période critique',
+        body: `"${batch.nom}" : dans ${28 - currentDay}j, les poulets entrent en phase J28+. Anticipe le stock d'aliment.`,
+        severity: 'info',
+        date: new Date(),
+        link: 'production',
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
  * Vérifie toutes les conditions et retourne les alertes actives
  */
 export function checkAllNotifications(data: AppData): CheckResult {
@@ -182,6 +223,7 @@ export function checkAllNotifications(data: AppData): CheckResult {
     ...checkVaccinationReminders(data),
     ...checkMortalityAlerts(data),
     ...checkCreditDeadlines(data),
+    ...checkProductionCriticalPeriod(data),
   ];
 
   results.sort((a, b) => {
